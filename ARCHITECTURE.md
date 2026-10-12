@@ -28,6 +28,7 @@
 | &emsp; 4.13 [Object Pool](#413-object-pool-system) | Generic pooling |
 | &emsp; 4.14 [Room System](#414-room-system-planned) | Rooms, doors, map structure (planned) |
 | &emsp; 4.15 [Enemy Types](#415-enemy-types-planned) | Per-type behaviors (planned) |
+| &emsp; 4.16 [Game Flow](#416-game-flow--scene-flow) | Game state, run tracking, scene loading |
 | [5. Input System](#5-input-system) | Action bindings |
 | [6. Scenes](#6-scenes) | Scene list and build status |
 | [7. Prefabs](#7-prefabs) | Prefab inventory |
@@ -197,6 +198,7 @@ The project follows a **composition-over-inheritance** architecture. Entities (`
 | **State Machine** | `EnemyBehavior` FSM (Chasing, SeekingWeapon, Attacking) | Enemy AI decision-making |
 | **Interface Segregation** | `IMoveInput`, `IInteractable`, `IModifierProvider` | Contracts with 1–2 members; classes choose what they implement |
 | **Object Pool** | `ObjectPool<T>` + `PoolManager` | Reuse projectile instances — avoid Instantiate/Destroy GC pressure |
+| **Global State + Service Singletons** | `GameManager`, `RunManager`, `SceneLoader` (`Systems/Game`) | One owner per concern; game state and scene changes flow through a single place |
 | **Room Controller** | `RoomController` (planned) | Locks exits, spawns enemies, tracks room clear state |
 | **Template Method** | `EnemyBehavior` base + derived types | Shared FSM skeleton, overridden behavior per enemy type |
 
@@ -244,8 +246,8 @@ Scripts/
 │       └── RoomType.cs (enum)
 ├── Systems/             # Global managers and services
 │   ├── Pool/              # ObjectPool.cs, PoolManager.cs, IPoolable.cs
-│   ├── GameManager.cs     # (planned)
-│   ├── RunManager.cs      # (planned)
+│   ├── Game/              # GameState.cs, GameManager.cs, RunManager.cs, RunStats.cs,
+│   │                      # SceneLoader.cs, SceneId.cs, Bootstrap.cs
 │   └── AudioManager.cs    # (planned)
 ├── UI/
 │   ├── HUD/             # (planned) HealthBar, RunTimer, AmmoDisplay, ModifierDisplay
@@ -633,6 +635,55 @@ Attacking
 
 ---
 
+### 4.16 Game Flow & Scene Flow
+
+**Files**: `GameState.cs`, `GameManager.cs`, `RunManager.cs`, `RunStats.cs`, `SceneLoader.cs`, `SceneId.cs`, `Bootstrap.cs` (namespace `Systems.Game`)
+
+Core infrastructure shared by every scene. Built as Stage A of the Phase 1 foundation.
+
+#### Game States
+| State | `Time.timeScale` | Meaning |
+|-------|------------------|---------|
+| `MainMenu` | 1 | In a menu |
+| `Running` | 1 | Playing a run |
+| `Paused` | 0 | Run suspended |
+| `GameOver` | 0 | Run ended (freeze world, show results) |
+
+#### Components
+| Component | Role |
+|-----------|------|
+| `GameManager` | Persistent singleton. Holds `CurrentState`, fires `StateChanged(prev, next)`. **Only writer of `Time.timeScale`** — nothing else touches it. `TogglePause()` switches Running ⇄ Paused. |
+| `RunManager` | Persistent singleton. `ElapsedTime`, `Kills`, `RoomsCleared`, `IsRunning`. `StartRun()`, `EndRun()` (fires `RunEnded(RunStats)`), `AddKill()`, `AddRoomCleared()`. Uses `Time.deltaTime`, so it freezes automatically while paused. |
+| `SceneLoader` | Persistent singleton. The **only** caller of `SceneManager`. `Load(SceneId, onComplete)` async single-load with `ProgressChanged` / `SceneLoaded` events. Throws if the scene is not in Build Settings or a load is already in flight. |
+| `Bootstrap` | Entry point of the `Bootstrap` scene. Verifies the managers exist (fail-fast), then transitions to `MainMenu`. Runs in `Start()` so every manager `Awake()` has completed. |
+| `SceneId` | Enum of loadable scenes. **Values must match scene file names** — `Bootstrap`, `MainMenu`, `Gameplay`. |
+
+#### Scene Flow
+```
+Bootstrap (index 0)  →  MainMenu  ⇄  Gameplay
+        │                   │            │
+   creates the         Start Game    Run in progress;
+   persistent root       → Running    Return to Menu / Game Over
+```
+
+- The `Bootstrap` scene contains a single `Persistent` object holding `GameManager`, `RunManager`, `SceneLoader` and `Bootstrap`.
+- All four call `DontDestroyOnLoad`, so they survive scene changes as one unit.
+- Scene changes are requested by `SceneId` and resolved by name via `SceneLoader` — gameplay code never references `SceneManager`.
+
+#### Persistent Object Lifecycle
+- `DontDestroyOnLoad` is set inside each manager's `Awake` — there is no manual "don't destroy" step in the Inspector.
+- Each manager uses the same fail-fast singleton guard as `PoolManager` (throws on a second instance, nulls `Instance` in `OnDestroy`).
+- Always run the game from the `Bootstrap` scene. Playing `MainMenu`/`Gameplay` directly leaves the manager references null by design.
+
+#### Known limitations
+- `SceneFlowDebugger` (in `Scripts/Debug/`) is a temporary verification tool used to exercise states/scenes before the menus exist — remove it once Stage B ships.
+- No loading screen or fade yet; `ProgressChanged` exists for Phase 3.5 to consume.
+- `RunStats` is produced but not displayed — the Game Over screen (Phase 2.6) is the intended consumer.
+
+**Status**: ✅ Complete (state, run tracking, scene flow); menus/audio are later stages
+
+---
+
 ## 5. Input System
 
 **Asset**: `PlayerInputActions.inputactions`
@@ -654,10 +705,12 @@ Attacking
 
 | Scene | In Build | Status | Contents |
 |-------|----------|--------|----------|
-| **SampleScene** | ✅ Yes (index 0) | Active | Main gameplay — Player, Enemy, weapons, pickups, canvas |
-| **Bootstrap** | ❌ No | Empty | Placeholder |
-| **Gameplay** | ❌ No | Empty | Placeholder |
-| **MainMenu** | ❌ No | Empty | Placeholder |
+| **Bootstrap** | ✅ Yes (index 0) | Entry | `Persistent` object: `GameManager`, `RunManager`, `SceneLoader`, `Bootstrap` |
+| **MainMenu** | ✅ Yes (index 1) | Placeholder | Menu UI (Stage B); `SceneFlowDebugger` for Stage A verification |
+| **Gameplay** | ✅ Yes (index 2) | Placeholder | Run scene (Player, Enemy, weapons, pickups, canvas) |
+| **SampleScene** | ✅ Yes (index 3) | Legacy sandbox | Original test scene — not part of the game flow |
+
+> **Always press Play from `Bootstrap`** (build index 0). The persistent managers are created there; the other scenes rely on them surviving the scene load (see §4.16).
 
 ---
 
@@ -741,8 +794,9 @@ Attacking
 | Map Structure | 🔲 Planned | Linear room sequence with transitions |
 | Enemy Types | 🔲 Planned | Chaser, Shooter, Rusher, etc. |
 | Boss System | 🔲 Planned | Multi-phase boss encounter |
-| Game State | 🔲 Planned | Run/Paused/GameOver state machine |
-| Scene Flow | 🔲 Planned | Bootstrap → Menu → Gameplay |
+| Game State | ✅ Done | `Systems/Game` — `GameManager` singleton, owns `Time.timeScale` |
+| Run Manager | ✅ Done | Run timer + stats, persistent (survives scene unload) |
+| Scene Flow | ✅ Done | `SceneLoader` async loads; Bootstrap → MainMenu → Gameplay |
 | Main Menu | 🔲 Planned | Start, Settings, Quit |
 | Settings | 🔲 Planned | Volume, Resolution, Fullscreen |
 | Audio Manager | 🔲 Planned | BGM + SFX layers |
@@ -773,10 +827,10 @@ Attacking
 
 | Gap | Priority | Description |
 |-----|----------|-------------|
-| **Game State Manager** | 🔴 High | No singleton managing Run / Paused / GameOver states |
-| **Scene Flow** | 🔴 High | Bootstrap, MainMenu, Gameplay scenes empty — no scene loading |
-| **Main Menu** | 🔴 High | No main menu UI |
-| **Run Manager** | 🔴 High | No run timer, no run state tracking |
+| **Game State Manager** | ✅ Done | `GameManager` — MainMenu / Running / Paused / GameOver |
+| **Scene Flow** | ✅ Done | `SceneLoader` async loads; Bootstrap → MainMenu → Gameplay |
+| **Main Menu** | 🔴 High | No main menu UI yet (Stage B) — `SceneFlowDebugger` used for Stage A verification |
+| **Run Manager** | ✅ Done | `RunManager` — run timer + kill/room stats |
 | **Map Structure** | 🔴 High | No room sequence — no start → combat → item → boss flow |
 | **Door / Lock System** | 🔴 High | No doors that lock on enter and unlock on room clear |
 | **Game Over Screen** | 🔴 High | No death screen, no restart option |
@@ -839,9 +893,9 @@ Attacking
 | # | Task | Description | Depends On |
 |---|------|-------------|------------|
 | 1.1 | **Object Pool** ✅ | Generic `ObjectPool<T>` + `IPoolable` interface. Pre-warm, get, return. | — |
-| 1.2 | **Game State Manager** | Singleton: `MainMenu`, `Running`, `Paused`, `GameOver`. Scene-agnostic. | — |
-| 1.3 | **Run Manager** | Tracks run timer, current room, run stats. Consumes GameState. | 1.2 |
-| 1.4 | **Scene Flow** | Bootstrap → MainMenu → Gameplay. `SceneManager.LoadSceneAsync`. | 1.2 |
+| 1.2 | **Game State Manager** ✅ | Singleton: `MainMenu`, `Running`, `Paused`, `GameOver`. Scene-agnostic. | — |
+| 1.3 | **Run Manager** ✅ | Tracks run timer, current room, run stats. Consumes GameState. | 1.2 |
+| 1.4 | **Scene Flow** ✅ | Bootstrap → MainMenu → Gameplay. `SceneManager.LoadSceneAsync`. | 1.2 |
 | 1.5 | **Main Menu UI** | Title, Start Game, Settings, Quit. | 1.4 |
 | 1.6 | **Settings Menu** | Music volume, SFX volume, resolution dropdown, fullscreen toggle. | 1.4 |
 | 1.7 | **Pause Menu** | ESC toggle. Resume, Settings, Quit to Menu. | 1.2 |

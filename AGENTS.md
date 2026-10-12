@@ -22,6 +22,7 @@ Unity 6.3 LTS 2D Roguelite. C#. URP 2D render pipeline. No CLI build system -- e
 - `Scripts/Components/Modifiers/` -- stat modifier pipeline (Add-then-Multiply calculation)
 - `Scripts/Components/Enemy/` -- AI state machine (Chasing / SeekingWeapon / Attacking)
 - `Scripts/Components/PlayerInput/` -- Unity Input System bridge
+- `Scripts/Systems/` -- global services: `Pool/` (object pooling) and `Game/` (game state, run tracking, scene loading)
 - `Scripts/Debug/` -- debug loggers and testers
 
 ## Key Patterns
@@ -30,10 +31,11 @@ Unity 6.3 LTS 2D Roguelite. C#. URP 2D render pipeline. No CLI build system -- e
 - **Observer**: C# `Action` events on Health, Weapon, WeaponHolder, ModifierInventory
 - **Pipeline**: Modifiers transform `WeaponFireContext` before strategy execution
 - **State**: `EnemyBehavior` FSM with 3 states
+- **Singleton service**: `PoolManager`, `GameManager`, `RunManager`, `SceneLoader` -- one instance, fail-fast guard, persistent where needed (`DontDestroyOnLoad`)
 
 ## Gotchas
 
-- Only `SampleScene` is in build settings. Other scenes (Bootstrap, MainMenu, Gameplay) exist but are not included.
+- Always press Play from the `Bootstrap` scene (Build Settings index 0). `MainMenu` and `Gameplay` must also be in Build Settings. Playing them directly leaves the persistent managers (`GameManager`, `RunManager`, `SceneLoader`) null -- they are created in `Bootstrap`.
 - No `.asmdef` files -- all scripts compile into the default `Assembly-CSharp`.
 - No unit tests yet. `com.unity.test-framework` is imported but unused.
 - No CI/CD, no linter, no formatter configured.
