@@ -2,6 +2,7 @@ using Components.Base;
 using Components.Base.HealthRelated;
 using Components.PlayerInput;
 using Components.Weapons;
+using Systems.Game;
 using UnityEngine;
 
 namespace Entities.Player
@@ -30,8 +31,15 @@ namespace Entities.Player
             _interaction = GetComponent<Interaction>();
         }
     
+        // Ignore input while paused/dead. Falls back to enabled when no GameManager exists
+        // (for example the legacy SampleScene sandbox).
+        private static bool IsInputEnabled => GameManager.Instance == null || GameManager.Instance.IsRunning;
+
         private void Update()
         {
+            if (!IsInputEnabled)
+                return;
+
             UpdateLookDirection();
             UpdateFire();
         }
@@ -65,26 +73,40 @@ namespace Entities.Player
     
         private void HandleFire()
         {
+            if (!IsInputEnabled)
+                return;
+
             _weaponHolder.TryFire(_lookDirection.Forward);
         }
     
         private void HandleReload()
         {
+            if (!IsInputEnabled)
+                return;
+
             _weaponHolder.Reload();
+        }
+    
+        private void HandleInteract()
+        {
+            if (!IsInputEnabled)
+                return;
+
+            _interaction.Interact();
         }
     
         private void OnEnable()
         {
             _playerInput.ReloadPressed += HandleReload;
             _playerInput.FirePressed += HandleFire;
-            _playerInput.InteractPressed += _interaction.Interact;
+            _playerInput.InteractPressed += HandleInteract;
         }
 
         private void OnDisable()
         {
             _playerInput.ReloadPressed -= HandleReload;
             _playerInput.FirePressed -= HandleFire;
-            _playerInput.InteractPressed -= _interaction.Interact;
+            _playerInput.InteractPressed -= HandleInteract;
         }
     }
 }

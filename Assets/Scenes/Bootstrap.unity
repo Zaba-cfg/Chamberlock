@@ -132,6 +132,8 @@ GameObject:
   - component: {fileID: 548343636}
   - component: {fileID: 548343635}
   - component: {fileID: 548343634}
+  - component: {fileID: 548343638}
+  - component: {fileID: 548343639}
   m_Layer: 0
   m_Name: Persistent
   m_TagString: Untagged
@@ -202,6 +204,37 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 20e7fbcda6ff9d349a70c14ce7f8cd8c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Systems.Game.GameManager
+--- !u!114 &548343638
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 548343632}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f323aea42d3a65048abcc9c2d59bc790, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Systems.Game.PauseInput
+--- !u!114 &548343639
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 548343632}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a897c7bb4689a8947bf43e78b3b88872, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Systems.Audio.AudioManager
+  _mixer: {fileID: 24100000, guid: 507ca954877551a4bb515ed265530607, type: 2}
+  _musicGroup: {fileID: 2328758187730286910, guid: 507ca954877551a4bb515ed265530607, type: 2}
+  _sfxGroup: {fileID: 3963942849157994955, guid: 507ca954877551a4bb515ed265530607, type: 2}
+  _musicVolumeParameter: MusicVolume
+  _sfxVolumeParameter: SfxVolume
+  _musicTrim: 1
+  _sfxTrim: 1
 --- !u!1 &976772392
 GameObject:
   m_ObjectHideFlags: 0

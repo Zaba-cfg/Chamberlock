@@ -1,4 +1,4 @@
-# Project-Roguelite — Architecture & Roadmap
+# Project-Roguelike — Architecture & Roadmap
 
 > **Document State**: Alive roadmap — updated during development.
 > **Last Updated**: 2026-10-12
@@ -29,6 +29,7 @@
 | &emsp; 4.14 [Room System](#414-room-system-planned) | Rooms, doors, map structure (planned) |
 | &emsp; 4.15 [Enemy Types](#415-enemy-types-planned) | Per-type behaviors (planned) |
 | &emsp; 4.16 [Game Flow](#416-game-flow--scene-flow) | Game state, run tracking, scene loading |
+| &emsp; 4.17 [Audio](#417-audio-system) | Music + SFX layers, mixer-driven volume |
 | [5. Input System](#5-input-system) | Action bindings |
 | [6. Scenes](#6-scenes) | Scene list and build status |
 | [7. Prefabs](#7-prefabs) | Prefab inventory |
@@ -247,11 +248,14 @@ Scripts/
 ├── Systems/             # Global managers and services
 │   ├── Pool/              # ObjectPool.cs, PoolManager.cs, IPoolable.cs
 │   ├── Game/              # GameState.cs, GameManager.cs, RunManager.cs, RunStats.cs,
-│   │                      # SceneLoader.cs, SceneId.cs, Bootstrap.cs
-│   └── AudioManager.cs    # (planned)
+│   │                      # SceneLoader.cs, SceneId.cs, PauseInput.cs, Bootstrap.cs
+│   ├── Settings/          # GameSettings.cs (static, PlayerPrefs-backed)
+│   └── Audio/             # AudioManager.cs (music + SFX layers, mixer-driven)
 ├── UI/
+│   ├── QuitGame.cs      # Static helper — Editor-aware application quit
 │   ├── HUD/             # (planned) HealthBar, RunTimer, AmmoDisplay, ModifierDisplay
-│   ├── Menus/           # (planned) MainMenu, PauseMenu, GameOverScreen, SettingsMenu
+│   ├── Menus/           # MainMenuController.cs, PauseMenuController.cs,
+│   │                    # SettingsPanelController.cs ; (planned) GameOverScreen
 │   └── WeaponAmmoUI/    # WeaponAmmoUI.cs
 └── Debug/               # Debug loggers and testers
     ├── HealthDebugger.cs, HealthTester.cs
@@ -490,13 +494,28 @@ Attacking ────► SeekingWeapon (weapon empty / dropped)
 
 ### 4.11 UI System
 
+#### HUD
+
 **File**: `WeaponAmmoUI.cs`
 
 - Subscribes to `WeaponHolder.WeaponChanged` and `Weapon.AmmoChanged`
 - Displays `CurrentAmmo / ReserveAmmo` or "∞ ∞" for infinite ammo
 - Uses TextMeshPro `TextMeshProUGUI`
 
-**Status**: ✅ Complete (minimal)
+#### Menus (`Scripts/UI/Menus`)
+
+| Component | Role |
+|-----------|------|
+| `MainMenuController` | Main Menu: **New Game** (starts a run, switches to `Running`, loads `Gameplay`), **Settings**, **Quit**. |
+| `PauseMenuController` | Gameplay pause: routes the `Pause` action — closes settings if open, otherwise toggles pause. **Resume**, **Settings**, **Quit to Menu**. |
+| `SettingsPanelController` | Shared settings UI (one prefab, instanced by both menus). Music/SFX volume, fullscreen toggle, resolution dropdown. Raises `Opened` / `Closed`. |
+| `QuitGame` | Static helper — stops Play mode in the Editor, `Application.Quit()` in a build. |
+
+**Mutual exclusion.** The settings panel is a *sibling of the menu items* inside the same menu panel, so hiding the panel would also hide settings. Instead, when settings opens the owner controller hides the panel's other children and restores them when `SettingsPanelController` raises `Closed` — the two menus never overlap. Visibility is owned by the menu controllers; the settings panel stays agnostic of who hosts it.
+
+**Persistence.** `GameSettings` (namespace `Systems.Settings`) is a static, `PlayerPrefs`-backed store; `SettingsPanelController` writes straight to it and `Bootstrap` applies the saved values on startup. `AudioManager` consumes the volume values (§4.17).
+
+**Status**: ✅ Complete (HUD minimal; Main Menu, Pause Menu and Settings done)
 
 ---
 
@@ -655,7 +674,8 @@ Core infrastructure shared by every scene. Built as Stage A of the Phase 1 found
 | `GameManager` | Persistent singleton. Holds `CurrentState`, fires `StateChanged(prev, next)`. **Only writer of `Time.timeScale`** — nothing else touches it. `TogglePause()` switches Running ⇄ Paused. |
 | `RunManager` | Persistent singleton. `ElapsedTime`, `Kills`, `RoomsCleared`, `IsRunning`. `StartRun()`, `EndRun()` (fires `RunEnded(RunStats)`), `AddKill()`, `AddRoomCleared()`. Uses `Time.deltaTime`, so it freezes automatically while paused. |
 | `SceneLoader` | Persistent singleton. The **only** caller of `SceneManager`. `Load(SceneId, onComplete)` async single-load with `ProgressChanged` / `SceneLoaded` events. Throws if the scene is not in Build Settings or a load is already in flight. |
-| `Bootstrap` | Entry point of the `Bootstrap` scene. Verifies the managers exist (fail-fast), then transitions to `MainMenu`. Runs in `Start()` so every manager `Awake()` has completed. |
+| `Bootstrap` | Entry point of the `Bootstrap` scene. Verifies the managers exist (fail-fast), loads `GameSettings`, applies display settings and audio volumes, sets `MainMenu`, then transitions to the `MainMenu` scene. Runs in `Start()` so every manager `Awake()` has completed. |
+| `PauseInput` | Persistent reader for the `Pause` action (`Player/Pause`). Raises `PausePressed`; the Pause Menu controller decides what a press means (close settings, or toggle pause). |
 | `SceneId` | Enum of loadable scenes. **Values must match scene file names** — `Bootstrap`, `MainMenu`, `Gameplay`. |
 
 #### Scene Flow
@@ -666,8 +686,8 @@ Bootstrap (index 0)  →  MainMenu  ⇄  Gameplay
    persistent root       → Running    Return to Menu / Game Over
 ```
 
-- The `Bootstrap` scene contains a single `Persistent` object holding `GameManager`, `RunManager`, `SceneLoader` and `Bootstrap`.
-- All four call `DontDestroyOnLoad`, so they survive scene changes as one unit.
+- The `Bootstrap` scene contains a single `Persistent` object holding `GameManager`, `RunManager`, `SceneLoader`, `PauseInput`, `AudioManager` and `Bootstrap`.
+- All six call `DontDestroyOnLoad`, so they survive scene changes as one unit.
 - Scene changes are requested by `SceneId` and resolved by name via `SceneLoader` — gameplay code never references `SceneManager`.
 
 #### Persistent Object Lifecycle
@@ -676,11 +696,42 @@ Bootstrap (index 0)  →  MainMenu  ⇄  Gameplay
 - Always run the game from the `Bootstrap` scene. Playing `MainMenu`/`Gameplay` directly leaves the manager references null by design.
 
 #### Known limitations
-- `SceneFlowDebugger` (in `Scripts/Debug/`) is a temporary verification tool used to exercise states/scenes before the menus exist — remove it once Stage B ships.
 - No loading screen or fade yet; `ProgressChanged` exists for Phase 3.5 to consume.
 - `RunStats` is produced but not displayed — the Game Over screen (Phase 2.6) is the intended consumer.
 
-**Status**: ✅ Complete (state, run tracking, scene flow); menus/audio are later stages
+**Status**: ✅ Complete (state, run tracking, scene flow); menus done (§4.11), audio done (§4.17)
+
+---
+
+### 4.17 Audio System
+
+**Files**: `AudioManager.cs` (namespace `Systems.Audio`)
+
+Persistent singleton providing two mixer-driven layers. It mirrors the Settings volumes, so the sliders control everything from one place.
+
+#### Layers
+| Layer | Backing | API |
+|-------|---------|-----|
+| **Music** | looping `AudioSource` created as a child | `PlayMusic(clip, loop)` / `StopMusic()` |
+| **SFX** | one-shot `AudioSource` (`PlayOneShot`, overlaps) | `PlaySfx(clip, volumeScale)` |
+
+#### Volume
+- `AudioMixer` (`MainMixer`) with `Master → Music` and `Master → SFX` groups; the group volumes are exposed as `MusicVolume` / `SfxVolume`.
+- `ApplyVolumes()` reads `GameSettings.MusicVolume` / `SfxVolume` and calls `AudioMixer.SetFloat` in decibels (`Mathf.Log10(v) * 20f`; clamped to `-80 dB` at silence).
+- Subscribes to `GameSettings.MusicVolumeChanged` / `SfxVolumeChanged` in `OnEnable` and unsubscribes in `OnDisable`, so the sliders apply live.
+- `Bootstrap` calls `ApplyVolumes()` once after `GameSettings.Load()` to apply the saved values at startup.
+- Warns once if an exposed parameter name does not match the mixer.
+
+#### Wiring
+- Lives on the `Bootstrap` scene's `Persistent` object (sixth component), so music survives scene changes.
+- `Bootstrap` declares `[RequireComponent(typeof(AudioManager))]` and fails fast if it is missing.
+- Existing `WeaponAudioFeedback` / `HealthAudioFeedback` sources route to the `SFX` group through their `Output` field, so they obey the SFX slider with no code changes.
+
+#### Known limitations
+- No music clips imported yet — the playback API is ready; drop tracks into `Assets/Audio/Music`.
+- No cross-fade, ducking, or per-scene music automation (Phase 3.5 territory).
+
+**Status**: ✅ Complete (mixer + both layers wired; music content pending)
 
 ---
 
@@ -705,9 +756,9 @@ Bootstrap (index 0)  →  MainMenu  ⇄  Gameplay
 
 | Scene | In Build | Status | Contents |
 |-------|----------|--------|----------|
-| **Bootstrap** | ✅ Yes (index 0) | Entry | `Persistent` object: `GameManager`, `RunManager`, `SceneLoader`, `Bootstrap` |
-| **MainMenu** | ✅ Yes (index 1) | Placeholder | Menu UI (Stage B); `SceneFlowDebugger` for Stage A verification |
-| **Gameplay** | ✅ Yes (index 2) | Placeholder | Run scene (Player, Enemy, weapons, pickups, canvas) |
+| **Bootstrap** | ✅ Yes (index 0) | Entry | `Persistent` object: `GameManager`, `RunManager`, `SceneLoader`, `PauseInput`, `Bootstrap` |
+| **MainMenu** | ✅ Yes (index 1) | ✅ Done | Main Menu UI (Title, New Game, Settings, Quit) + shared Settings panel (prefab instance) |
+| **Gameplay** | ✅ Yes (index 2) | 🚧 WIP | Pause/Settings UI + camera only — Player, enemies, weapons, pickups and `PoolManager` still live in `SampleScene`; migration pending |
 | **SampleScene** | ✅ Yes (index 3) | Legacy sandbox | Original test scene — not part of the game flow |
 
 > **Always press Play from `Bootstrap`** (build index 0). The persistent managers are created there; the other scenes rely on them surviving the scene load (see §4.16).
@@ -766,6 +817,7 @@ Bootstrap (index 0)  →  MainMenu  ⇄  Gameplay
 | **Room-based spatial loop** | Inspired by *The Binding of Isaac* — rooms are the core unit of progression |
 | **Predefined room layouts** | v1 uses hand-crafted tilemap rooms — procedural generation deferred to Phase 7 |
 | **Object pooling from start** | Avoids GC spikes — projectiles and entities reused, not instantiated/destroyed |
+| **Audio via mixer groups** | Music and SFX route to `AudioMixer` groups — one place controls each category's volume; `GameSettings` feeds it in decibels |
 | **Enemy types via composition** | Each enemy type is a `MonoBehaviour` composing or extending base FSM — not a monolithic class |
 | **Boss as room event** | Boss is a special room type, not a separate scene — keeps state consistent |
 
@@ -797,9 +849,10 @@ Bootstrap (index 0)  →  MainMenu  ⇄  Gameplay
 | Game State | ✅ Done | `Systems/Game` — `GameManager` singleton, owns `Time.timeScale` |
 | Run Manager | ✅ Done | Run timer + stats, persistent (survives scene unload) |
 | Scene Flow | ✅ Done | `SceneLoader` async loads; Bootstrap → MainMenu → Gameplay |
-| Main Menu | 🔲 Planned | Start, Settings, Quit |
-| Settings | 🔲 Planned | Volume, Resolution, Fullscreen |
-| Audio Manager | 🔲 Planned | BGM + SFX layers |
+| Main Menu | ✅ Done | New Game, Settings, Quit |
+| Pause Menu | ✅ Done | ESC toggle — Resume, Settings, Quit to Menu |
+| Settings | ✅ Done | Music/SFX volume, resolution, fullscreen (`GameSettings`, PlayerPrefs) |
+| Audio Manager | ✅ Done | `Systems/Audio` — music + SFX layers; mixer volume driven by `GameSettings` |
 | HUD | 🔲 Planned | Health, Timer, Weapon, Modifiers |
 | Death Handling | 🔴 Blocked | Player + Enemy death logic needed |
 
@@ -829,13 +882,13 @@ Bootstrap (index 0)  →  MainMenu  ⇄  Gameplay
 |-----|----------|-------------|
 | **Game State Manager** | ✅ Done | `GameManager` — MainMenu / Running / Paused / GameOver |
 | **Scene Flow** | ✅ Done | `SceneLoader` async loads; Bootstrap → MainMenu → Gameplay |
-| **Main Menu** | 🔴 High | No main menu UI yet (Stage B) — `SceneFlowDebugger` used for Stage A verification |
+| **Main Menu** | ✅ Done | `MainMenuController` — New Game, Settings, Quit |
 | **Run Manager** | ✅ Done | `RunManager` — run timer + kill/room stats |
 | **Map Structure** | 🔴 High | No room sequence — no start → combat → item → boss flow |
 | **Door / Lock System** | 🔴 High | No doors that lock on enter and unlock on room clear |
 | **Game Over Screen** | 🔴 High | No death screen, no restart option |
-| **Pause Menu** | 🟡 Medium | No pause functionality |
-| **Settings Menu** | 🟡 Medium | No volume, resolution, or display settings |
+| **Pause Menu** | ✅ Done | `PauseMenuController` — ESC toggle (Resume / Settings / Quit to Menu) |
+| **Settings Menu** | ✅ Done | `SettingsPanelController` — volume, resolution, fullscreen |
 
 ### 10.3 UI Gaps
 
@@ -851,8 +904,8 @@ Bootstrap (index 0)  →  MainMenu  ⇄  Gameplay
 
 | Gap | Priority | Description |
 |-----|----------|-------------|
-| **Audio Manager** | 🔴 High | No global audio management — individual AudioSources only |
-| **Music System** | 🔴 High | No background music |
+| **Audio Manager** | ✅ Done | `Systems/Audio` — music + SFX layers, mixer volume from `GameSettings` |
+| **Music System** | ✅ Done | `PlayMusic`/`StopMusic` ready; no clips imported yet (add to `Assets/Audio/Music`) |
 | **Room SFX** | 🟡 Medium | No door lock/unlock sounds, no room clear jingle |
 | **Enemy SFX** | 🟡 Medium | No enemy-specific attack/death sounds |
 | **Boss SFX** | 🟡 Medium | No boss entrance, phase transition, death sounds |
@@ -896,10 +949,10 @@ Bootstrap (index 0)  →  MainMenu  ⇄  Gameplay
 | 1.2 | **Game State Manager** ✅ | Singleton: `MainMenu`, `Running`, `Paused`, `GameOver`. Scene-agnostic. | — |
 | 1.3 | **Run Manager** ✅ | Tracks run timer, current room, run stats. Consumes GameState. | 1.2 |
 | 1.4 | **Scene Flow** ✅ | Bootstrap → MainMenu → Gameplay. `SceneManager.LoadSceneAsync`. | 1.2 |
-| 1.5 | **Main Menu UI** | Title, Start Game, Settings, Quit. | 1.4 |
-| 1.6 | **Settings Menu** | Music volume, SFX volume, resolution dropdown, fullscreen toggle. | 1.4 |
-| 1.7 | **Pause Menu** | ESC toggle. Resume, Settings, Quit to Menu. | 1.2 |
-| 1.8 | **Audio Manager** | Singleton. BGM layer + SFX layer. Volume control via Settings. | 1.6 |
+| 1.5 | **Main Menu UI** ✅ | Title, Start Game, Settings, Quit. | 1.4 |
+| 1.6 | **Settings Menu** ✅ | Music volume, SFX volume, resolution dropdown, fullscreen toggle. | 1.4 |
+| 1.7 | **Pause Menu** ✅ | ESC toggle. Resume, Settings, Quit to Menu. | 1.2 |
+| 1.8 | **Audio Manager** ✅ | Singleton. BGM layer + SFX layer. Volume control via Settings. | 1.6 |
 
 ### Phase 2: Death & Feedback (🔴 Critical)
 
@@ -1007,6 +1060,8 @@ Bootstrap (index 0)  →  MainMenu  ⇄  Gameplay
 
 | Category | Count | Examples |
 |----------|-------|---------|
+| **Mixer** | 1 | `MainMixer.mixer` — Master → Music + SFX (exposed `MusicVolume` / `SfxVolume`) |
+| **Music** | 0 | (none yet — `Assets/Audio/Music` ready for tracks) |
 | **Combat & Gore** | 15 | bone_snap, crunch, punch, slap, squelching |
 | **Weapons** | 16 | sword_clash, shot_muffled, weapon_equip, weapon_upgrade |
 
