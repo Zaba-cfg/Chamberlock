@@ -23,7 +23,7 @@
 | &emsp; 4.8 [Weapon Pickup & Detection](#48-weapon-pickup--detection) | Pickup and area scanning |
 | &emsp; 4.9 [Player Input](#49-player-input-system) | Mouse + Gamepad, IMoveInput |
 | &emsp; 4.10 [Enemy AI](#410-enemy-ai-system) | 3-state FSM |
-| &emsp; 4.11 [UI System](#411-ui-system) | Ammo display |
+| &emsp; 4.11 [UI System](#411-ui-system) | HUD + menus |
 | &emsp; 4.12 [Debug System](#412-debug-system) | Loggers and testers |
 | &emsp; 4.13 [Object Pool](#413-object-pool-system) | Generic pooling |
 | &emsp; 4.14 [Room System](#414-room-system-planned) | Rooms, doors, map structure (planned) |
@@ -213,7 +213,7 @@ Scripts/
 │   └── Enemy/           # Enemy.cs
 ├── Components/
 │   ├── Base/            # Domain-agnostic reusable components
-│   │   ├── HealthRelated/   # Health, HealthVisualFeedback, HealthAudioFeedback
+│   │   ├── HealthRelated/   # Health, HealthVisualFeedback, HealthAudioFeedback, DestroyOnDeath
 │   │   ├── Weapon/          # WeaponPickup, WeaponDetection
 │   │   ├── Interaction.cs
 │   │   ├── LookDirection.cs
@@ -233,9 +233,12 @@ Scripts/
 │   │   └── ModifierPickup.cs, TemporaryModifierPickup.cs
 │   ├── Enemy/           # Enemy AI (per-type subclasses)
 │   │   ├── EnemyAIInput.cs, EnemyCombat.cs, EnemyWeaponDecision.cs
+│   │   ├── EnemyKillCounter.cs
 │   │   ├── EnemyBehavior/  # EnemyBehavior.cs (base), EnemyState.cs
 │   │   ├── Types/          # (planned) ChaserEnemy, ShooterEnemy, RusherEnemy, etc.
 │   │   └── Boss/           # (planned) BossBehavior, BossPhase
+│   ├── Player/          # Player-specific components
+│   │   └── PlayerDeathHandler.cs
 │   ├── PlayerInput/     # Unity Input System bridge
 │   │   ├── PlayerInput.cs, AimDevice.cs
 │   ├── Projectile/      # Projectile + ProjectileFireStrategy
@@ -253,10 +256,10 @@ Scripts/
 │   └── Audio/             # AudioManager.cs (music + SFX layers, mixer-driven)
 ├── UI/
 │   ├── QuitGame.cs      # Static helper — Editor-aware application quit
-│   ├── HUD/             # (planned) HealthBar, RunTimer, AmmoDisplay, ModifierDisplay
+│   ├── HUD/             # PlayerHealthBarUI.cs, RunTimerUI.cs, WeaponHudUI.cs
 │   ├── Menus/           # MainMenuController.cs, PauseMenuController.cs,
-│   │                    # SettingsPanelController.cs ; (planned) GameOverScreen
-│   └── WeaponAmmoUI/    # WeaponAmmoUI.cs
+│   │                    # SettingsPanelController.cs, GameOverScreen.cs
+│   └── WeaponAmmoUI/    # WeaponAmmoUI.cs (legacy minimal ammo text)
 └── Debug/               # Debug loggers and testers
     ├── HealthDebugger.cs, HealthTester.cs
     ├── WeaponDebugger.cs, ModifierDebugger.cs
@@ -268,18 +271,29 @@ Scripts/
 
 ### 4.1 Health System
 
-**Files**: `Health.cs`, `HealthVisualFeedback.cs`, `HealthAudioFeedback.cs`
+**Files**: `Health.cs`, `HealthVisualFeedback.cs`, `HealthAudioFeedback.cs`, `DestroyOnDeath.cs`
 
 | Component | Role |
 |-----------|------|
 | `Health` | Core HP container. `TakeDamage()`, `Heal()`, `RestoreFullHealth()`. Events: `DamageTaken(float)`, `HealthChanged(float,float)`, `Died` |
 | `HealthVisualFeedback` | Sprite flash on damage (coroutine-based color swap) |
 | `HealthAudioFeedback` | Plays damage and death audio clips via `AudioSource.PlayOneShot` |
+| `DestroyOnDeath` | Domain-agnostic: `Health.Died` → `Destroy(gameObject)`. Used by the Enemy; reusable for breakables |
+
+**Death consumers** (subscribe to `Health.Died`, keep concerns separate):
+
+| Component | Owner | Behaviour |
+|-----------|-------|-----------|
+| `DestroyOnDeath` | Enemy | Destroys the GameObject (no loot, no animation yet) |
+| `EnemyKillCounter` (`Components.Enemy`) | Enemy | `RunManager.AddKill()` — feeds the run's kill stat |
+| `PlayerDeathHandler` (`Components.Player`) | Player | `RunManager.EndRun()` → `GameManager.SetState(GameOver)` |
 
 **Design Decisions**:
 - Health is clamped `[0, MaxHealth]`; `IsDead` check guards all operations
 - Visual feedback uses coroutine with `StopCoroutine` to prevent stacking
 - Audio requires both clips at `Awake` (fail-fast with `MissingReferenceException`)
+- Death behaviour is split into small single-purpose components rather than embedded in `Health`, so entities compose only what they need
+- `PlayerDeathHandler` no-ops when there is no `GameManager` (keeps the `SampleScene` sandbox playable); input and movement need no explicit disabling — `GameOver` sets `Time.timeScale = 0` and `Player` gates itself on `GameManager.IsRunning`
 
 **Status**: ✅ Complete
 
@@ -494,13 +508,17 @@ Attacking ────► SeekingWeapon (weapon empty / dropped)
 
 ### 4.11 UI System
 
-#### HUD
+#### HUD (`Scripts/UI/HUD`) — lives under `GameplayCanvas/HUD`
 
-**File**: `WeaponAmmoUI.cs`
+| Component | Binds to | Role |
+|-----------|----------|------|
+| `PlayerHealthBarUI` | `Health.HealthChanged` | Drives a `Slider` (min 0 → max `MaxHealth`). Reads the initial value in `Start`, after `Health.Awake` |
+| `RunTimerUI` | polls `RunManager.ElapsedTime` | Elapsed time as `mm:ss` |
+| `WeaponHudUI` | `WeaponHolder.WeaponChanged`, `Weapon.AmmoChanged` / `ReloadStarted` / `ReloadCompleted` | Icon, name, ammo/reserve (or `∞`), reload indicator |
 
-- Subscribes to `WeaponHolder.WeaponChanged` and `Weapon.AmmoChanged`
-- Displays `CurrentAmmo / ReserveAmmo` or "∞ ∞" for infinite ammo
-- Uses TextMeshPro `TextMeshProUGUI`
+`WeaponAmmoUI` (`Scripts/UI/WeaponAmmoUI`) remains as the **legacy** minimal ammo text used in `SampleScene`; the full HUD uses `WeaponHudUI`.
+
+**Note.** Health/weapon HUDs subscribe in `OnEnable` and unsubscribe in `OnDisable`. Any read of another component's state happens in `Start`, because `Awake`/`OnEnable` order across different GameObjects is not guaranteed.
 
 #### Menus (`Scripts/UI/Menus`)
 
@@ -509,13 +527,23 @@ Attacking ────► SeekingWeapon (weapon empty / dropped)
 | `MainMenuController` | Main Menu: **New Game** (starts a run, switches to `Running`, loads `Gameplay`), **Settings**, **Quit**. |
 | `PauseMenuController` | Gameplay pause: routes the `Pause` action — closes settings if open, otherwise toggles pause. **Resume**, **Settings**, **Quit to Menu**. |
 | `SettingsPanelController` | Shared settings UI (one prefab, instanced by both menus). Music/SFX volume, fullscreen toggle, resolution dropdown. Raises `Opened` / `Closed`. |
+| `GameOverScreen` | Overlay shown on `GameState.GameOver`. Fills time/kills/rooms from `RunManager`; **Restart** (StartRun → Running → load `Gameplay`) and **Main Menu** (EndRun → MainMenu → load `MainMenu`). The component sits on a parent while only its `Panel` child is toggled. |
 | `QuitGame` | Static helper — stops Play mode in the Editor, `Application.Quit()` in a build. |
 
 **Mutual exclusion.** The settings panel is a *sibling of the menu items* inside the same menu panel, so hiding the panel would also hide settings. Instead, when settings opens the owner controller hides the panel's other children and restores them when `SettingsPanelController` raises `Closed` — the two menus never overlap. Visibility is owned by the menu controllers; the settings panel stays agnostic of who hosts it.
 
 **Persistence.** `GameSettings` (namespace `Systems.Settings`) is a static, `PlayerPrefs`-backed store; `SettingsPanelController` writes straight to it and `Bootstrap` applies the saved values on startup. `AudioManager` consumes the volume values (§4.17).
 
-**Status**: ✅ Complete (HUD minimal; Main Menu, Pause Menu and Settings done)
+**Gameplay canvas layout.**
+
+```
+GameplayCanvas
+├── HUD            # health bar, run timer, weapon HUD
+├── PauseMenu      # shown only while Paused
+└── GameOverScreen # overlay shown only while GameOver
+```
+
+**Status**: ✅ Complete (HUD, Main Menu, Pause Menu, Settings and Game Over done; modifier HUD still pending)
 
 ---
 
@@ -756,10 +784,10 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 
 | Scene | In Build | Status | Contents |
 |-------|----------|--------|----------|
-| **Bootstrap** | ✅ Yes (index 0) | Entry | `Persistent` object: `GameManager`, `RunManager`, `SceneLoader`, `PauseInput`, `Bootstrap` |
+| **Bootstrap** | ✅ Yes (index 0) | Entry | `Persistent` object: `GameManager`, `RunManager`, `SceneLoader`, `PauseInput`, `AudioManager`, `Bootstrap` |
 | **MainMenu** | ✅ Yes (index 1) | ✅ Done | Main Menu UI (Title, New Game, Settings, Quit) + shared Settings panel (prefab instance) |
-| **Gameplay** | ✅ Yes (index 2) | 🚧 WIP | Pause/Settings UI + camera only — Player, enemies, weapons, pickups and `PoolManager` still live in `SampleScene`; migration pending |
-| **SampleScene** | ✅ Yes (index 3) | Legacy sandbox | Original test scene — not part of the game flow |
+| **Gameplay** | ✅ Yes (index 2) | 🚧 WIP | Player, one Enemy, `PoolManager`, weapon pickups, Pause/Settings UI, HUD (health / timer / weapon) and Game Over overlay. No room system yet. |
+| **SampleScene** | ✅ Yes (index 3) | Legacy sandbox | Original test scene (played directly, no `GameManager`) — not part of the game flow |
 
 > **Always press Play from `Bootstrap`** (build index 0). The persistent managers are created there; the other scenes rely on them surviving the scene load (see §4.16).
 
@@ -769,8 +797,8 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 
 | Prefab | Description |
 |--------|-------------|
-| **Player** | Player entity shell with all components (100 HP, speed 5) |
-| **Enemy** | Enemy entity shell with AI, combat, weapon detection |
+| **Player** | Player entity shell with all components (100 HP, speed 5, `PlayerDeathHandler`) |
+| **Enemy** | Enemy entity shell with AI, combat, weapon detection, `DestroyOnDeath`, `EnemyKillCounter` |
 | **Projectile** | Bullet — speed 15, auto-destroy 5s, trigger collider |
 | **ProjectileWeapon** | Generic weapon prefab with WeaponPickup, visual/audio feedback |
 
@@ -839,7 +867,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | Weapon Detection | ✅ Done | Area-based weapon scanning |
 | Player Input | ✅ Done | Mouse + Gamepad, IMoveInput |
 | Enemy AI | ✅ Done | 3-state FSM, weapon seeking, combat |
-| Weapon UI | ✅ Done | Ammo display (minimal) |
+| Weapon UI | ✅ Done | `WeaponHudUI` — icon, name, ammo, reload (legacy `WeaponAmmoUI` in SampleScene) |
 | Debug Tools | ✅ Done | Loggers + testers for all systems |
 | Object Pool | ✅ Done | `Systems/Pool` — `ObjectPool<T>` + `PoolManager`; projectiles pooled (prewarm 32, grows on demand) |
 | Room System | 🔲 Planned | Room types, doors, lock/clear mechanic |
@@ -853,8 +881,8 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | Pause Menu | ✅ Done | ESC toggle — Resume, Settings, Quit to Menu |
 | Settings | ✅ Done | Music/SFX volume, resolution, fullscreen (`GameSettings`, PlayerPrefs) |
 | Audio Manager | ✅ Done | `Systems/Audio` — music + SFX layers; mixer volume driven by `GameSettings` |
-| HUD | 🔲 Planned | Health, Timer, Weapon, Modifiers |
-| Death Handling | 🔴 Blocked | Player + Enemy death logic needed |
+| HUD | ✅ Done | `Systems` HUD: health bar, run timer, weapon HUD (`Scripts/UI/HUD`) |
+| Death Handling | ✅ Done | Enemy destroyed + kill counted; player death → run end + `GameOver` |
 
 ---
 
@@ -866,8 +894,8 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 
 | Gap | Priority | Description |
 |-----|----------|-------------|
-| **Player Death Handling** | 🔴 High | `Health.Died` fires but nothing consumes it — no game over, no run end |
-| **Enemy Death Handling** | 🔴 High | No destroy, no loot drop, no death feedback |
+| **Player Death Handling** | ✅ Done | `PlayerDeathHandler` — `Health.Died` → `RunManager.EndRun()` + `GameManager.SetState(GameOver)` |
+| **Enemy Death Handling** | ✅ Done | `DestroyOnDeath` + `EnemyKillCounter`. No loot drop / death animation yet (see Drop System) |
 | **Room System** | 🔴 High | No rooms, no doors, no lock/clear mechanic — the core spatial loop is missing |
 | **Room Types** | 🔴 High | No combat rooms, item rooms, or boss room |
 | **Enemy Spawner** | 🔴 High | Enemies manually placed — no wave/room-based spawning |
@@ -886,7 +914,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | **Run Manager** | ✅ Done | `RunManager` — run timer + kill/room stats |
 | **Map Structure** | 🔴 High | No room sequence — no start → combat → item → boss flow |
 | **Door / Lock System** | 🔴 High | No doors that lock on enter and unlock on room clear |
-| **Game Over Screen** | 🔴 High | No death screen, no restart option |
+| **Game Over Screen** | ✅ Done | `GameOverScreen` overlay — run stats, Restart, Main Menu |
 | **Pause Menu** | ✅ Done | `PauseMenuController` — ESC toggle (Resume / Settings / Quit to Menu) |
 | **Settings Menu** | ✅ Done | `SettingsPanelController` — volume, resolution, fullscreen |
 
@@ -894,9 +922,9 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 
 | Gap | Priority | Description |
 |-----|----------|-------------|
-| **Health Bar** | 🔴 High | No player health display |
-| **Run Timer** | 🔴 High | No elapsed time display |
-| **Ammo Display** | 🟡 Medium | Existing `WeaponAmmoUI` is minimal — needs weapon icon, name |
+| **Health Bar** | ✅ Done | `PlayerHealthBarUI` — slider bound to `Health` |
+| **Run Timer** | ✅ Done | `RunTimerUI` — `mm:ss` from `RunManager` |
+| **Ammo Display** | ✅ Done | `WeaponHudUI` — icon, name, ammo/reserve, reload indicator |
 | **Modifier HUD** | 🟡 Medium | No active modifier display |
 | **Minimap** | 🟢 Low | No room/level overview |
 
@@ -960,14 +988,14 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 
 | # | Task | Description | Depends On |
 |---|------|-------------|------------|
-| 2.1 | **Enemy Death Handling** | `Health.Died` → death animation, loot drop, destroy/return to pool | 1.1, 1.2 |
-| 2.2 | **Player Death Handling** | `Health.Died` → disable input, death animation, GameOver state | 1.2 |
-| 2.3 | **Health Bar UI** | Player health bar (slider or segmented). Binds to `Health.HealthChanged`. | — |
-| 2.4 | **Run Timer UI** | Elapsed time display. Binds to RunManager. | 1.3 |
-| 2.5 | **Weapon HUD** | Weapon icon, name, ammo/reserve, reload indicator. | — |
-| 2.6 | **Game Over Screen** | Run stats (time, kills, rooms cleared), Restart, Main Menu buttons. | 2.2, 1.2 |
+| 2.1 | **Enemy Death Handling** ✅ | `Health.Died` → destroy + count kill (`DestroyOnDeath`, `EnemyKillCounter`). Animation / loot deferred. | 1.1, 1.2 |
+| 2.2 | **Player Death Handling** ✅ | `Health.Died` → `RunManager.EndRun()` + `GameOver` (input frozen by state). Animation deferred. | 1.2 |
+| 2.3 | **Health Bar UI** ✅ | Slider bound to `Health.HealthChanged`. | — |
+| 2.4 | **Run Timer UI** ✅ | Elapsed time (`mm:ss`) from `RunManager`. | 1.3 |
+| 2.5 | **Weapon HUD** ✅ | Weapon icon, name, ammo/reserve, reload indicator. | — |
+| 2.6 | **Game Over Screen** ✅ | Run stats (time, kills, rooms cleared), Restart, Main Menu buttons. | 2.2, 1.2 |
 | 2.7 | **Projectile Pooling** ✅ | Refactor `ProjectileFireStrategy` to use `ObjectPool<Projectile>`. | 1.1 |
-| 2.8 | **Screen Shake** | Camera shake on fire, hit, death. Coroutine-based. | — |
+| 2.8 | **Screen Shake** | Camera shake on fire, hit, death. Coroutine-based. **Deferred by request.** | — |
 
 ### Phase 3: Room System (🔴 Critical)
 
@@ -1080,10 +1108,13 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 
 | Prefab | Purpose |
 |--------|---------|
-| Player | Player entity |
-| Enemy | Enemy entity |
+| Player | Player entity (Health, PlayerInput, WeaponHolder, LookDirection, Interaction, `PlayerDeathHandler`) |
+| Enemy | Enemy entity (AI, WeaponHolder, Health, `DestroyOnDeath`, `EnemyKillCounter`) |
 | Projectile | Bullet entity |
 | ProjectileWeapon | Weapon pickup (generic) |
+| Colt / Pistol / Mosin / Katana | Weapon pickups (each with its own `WeaponData`) |
+| PoolManagerProjectile | `PoolManager` pre-configured for projectile pooling |
+| SettingPanel | Shared settings UI (instanced on the Main Menu and in Gameplay) |
 
 ---
 

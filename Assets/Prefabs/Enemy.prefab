@@ -24,13 +24,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1971351046853262438}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0.70710695, w: 0.7071067}
-  m_LocalPosition: {x: 0.3000002, y: -0.00000023841858, z: 0}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.5, y: 0.6, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1075286395213234193}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: -90}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2976969469855400215
 GameObject:
   m_ObjectHideFlags: 0
@@ -54,10 +54,12 @@ GameObject:
   - component: {fileID: 3556017765638883856}
   - component: {fileID: 737615061919891126}
   - component: {fileID: 6883790216891416977}
-  - component: {fileID: 1444042838367591094}
   - component: {fileID: 3483882415185487410}
   - component: {fileID: 4876464774687133018}
   - component: {fileID: 8983049688380647292}
+  - component: {fileID: 5076682262055427800}
+  - component: {fileID: 6368664443356909174}
+  - component: {fileID: -6472569565185535112}
   m_Layer: 0
   m_Name: Enemy
   m_TagString: Untagged
@@ -239,7 +241,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3040cf5e3940ed543bbc221acc73769b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Movement
-  _baseSpeed: 5
+  _baseSpeed: 2
 --- !u!114 &2421274334253220288
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -343,18 +345,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7549b66823e04edfa55f08cc9074b51e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ModifierController
---- !u!114 &1444042838367591094
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2976969469855400215}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d08555cc013def947ba63a730bb96463, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Debug.HealthDebugger
 --- !u!82 &3483882415185487410
 AudioSource:
   m_ObjectHideFlags: 0
@@ -478,5 +468,65 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 369bade2bb874da99913098bf67716a5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Components.Base.HealthRelated.HealthVisualFeedback
-  _damageColor: {r: 1, g: 1, b: 1, a: 1}
+  _damageColor: {r: 1, g: 0, b: 0, a: 1}
   _flashDuration: 0.05
+--- !u!114 &5076682262055427800
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2976969469855400215}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e907d0b8014704b4c8e136ca7f7418ba, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Components.Base.HealthRelated.DestroyOnDeath
+--- !u!114 &6368664443356909174
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2976969469855400215}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a278917e45ef8bc47b7e619d36d7d1a7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Components.Enemy.EnemyKillCounter
+--- !u!58 &-6472569565185535112
+CircleCollider2D:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2976969469855400215}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Density: 1
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_ForceSendLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_ForceReceiveLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_ContactCaptureLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_CallbackLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_IsTrigger: 0
+  m_UsedByEffector: 0
+  m_CompositeOperation: 0
+  m_CompositeOrder: 0
+  m_Offset: {x: 0, y: 0}
+  m_Radius: 0.6

@@ -12,6 +12,7 @@ Unity 6.3 LTS 2D Roguelite. C#. URP 2D render pipeline. No CLI build system -- e
 - **Event lifecycle**: Subscribe in `OnEnable()`, unsubscribe in `OnDisable()`. All inter-component communication via C# `Action` events.
 - **Interfaces**: `IMoveInput`, `IInteractable`, `IModifierProvider` -- all minimal (1-2 members).
 - **Naming**: `_camelCase` for private serialized fields, PascalCase for public members and methods.
+- **No code comments**: Do not write comments in C# code (including XML doc comments). If something needs explaining, document it in `ARCHITECTURE.md` — describe what the script does and why.
 
 ## Architecture (quick reference)
 

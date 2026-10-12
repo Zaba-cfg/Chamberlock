@@ -95,9 +95,7 @@ namespace Systems.Settings
 
             Screen.SetResolution(ResolutionWidth, ResolutionHeight, Fullscreen);
         }
-
-        // Statics survive Play sessions when Unity's domain reload is disabled; reset them so a
-        // fresh Play always starts from defaults (Load() then reads the saved values back).
+        
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStatics()
         {

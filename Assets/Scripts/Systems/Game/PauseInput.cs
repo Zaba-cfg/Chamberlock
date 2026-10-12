@@ -24,9 +24,7 @@ namespace Systems.Game
             DontDestroyOnLoad(gameObject);
 
             _actions = new PlayerInputActions();
-
-            // Resolved by name so this script compiles before the action is added to the asset,
-            // and fails fast with a clear message if the action was never created.
+            
             _pauseAction = _actions.asset.FindAction(PauseActionPath, throwIfNotFound: false);
 
             if (_pauseAction == null)

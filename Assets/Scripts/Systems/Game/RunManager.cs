@@ -34,8 +34,7 @@ namespace Systems.Game
         {
             if (!IsRunning)
                 return;
-
-            // Time.deltaTime is 0 while timeScale is 0, so Paused/GameOver freeze the timer automatically.
+            
             ElapsedTime += Time.deltaTime;
         }
 

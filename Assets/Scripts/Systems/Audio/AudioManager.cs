@@ -62,8 +62,7 @@ namespace Systems.Audio
             if (Instance == this)
                 Instance = null;
         }
-
-        /// Starts looping music, replacing the current track. No-op when the clip is null or already playing.
+        
         public void PlayMusic(AudioClip clip, bool loop = true)
         {
             if (clip == null || _musicSource.clip == clip)

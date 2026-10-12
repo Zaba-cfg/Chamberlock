@@ -30,9 +30,7 @@ namespace Entities.Player
             _weaponHolder = GetComponent<WeaponHolder>();
             _interaction = GetComponent<Interaction>();
         }
-    
-        // Ignore input while paused/dead. Falls back to enabled when no GameManager exists
-        // (for example the legacy SampleScene sandbox).
+        
         private static bool IsInputEnabled => GameManager.Instance == null || GameManager.Instance.IsRunning;
 
         private void Update()

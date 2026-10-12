@@ -8,7 +8,7 @@ namespace Components.Base.HealthRelated
     
     public class HealthVisualFeedback : MonoBehaviour
     {
-        [SerializeField] private Color _damageColor = Color.white;
+        [SerializeField] private Color _damageColor = Color.red;
         [SerializeField, Min(0f)] private float _flashDuration = 0.05f;
         
         private SpriteRenderer _spriteRenderer;
