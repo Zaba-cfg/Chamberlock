@@ -13,12 +13,11 @@ MonoBehaviour:
   m_Name: Pistol
   m_EditorClassIdentifier: Assembly-CSharp::WeaponData
   _weaponName: Pistol
-  _icon: {fileID: 0}
+  _icon: {fileID: 4319395737909131107, guid: 7f09f635afcd1954ebe30c267dc53c9a, type: 3}
   _damage: 10
   _fireRate: 3
   _magazineSize: 7
   _reloadDuration: 2
   _maxReserveAmmo: 21
-  _spreadAngle: 10
   _weaponFireStrategy: {fileID: 11400000, guid: dacc133eb8057f54582c8a89360d2d43, type: 2}
   _ammoType: 0

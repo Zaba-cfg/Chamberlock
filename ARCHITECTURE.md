@@ -1,7 +1,7 @@
 # Project-Roguelite — Architecture & Roadmap
 
 > **Document State**: Alive roadmap — updated during development.
-> **Last Updated**: 2026-10-06
+> **Last Updated**: 2026-10-12
 
 ---
 
@@ -63,7 +63,58 @@
 | **Filter Mode** | Point (no blur) |
 | **Compression** | None |
 | **Tile Size** | 16×16 |
-| **Entity Size** | 32×32 |
+| **Entity Footprint** | 16×24 px (1 tile wide × ~1.5 tall) |
+| **Entity Sprite Canvas** | 32×32 px (body ~16×24; remainder is animation padding) |
+| **Camera Orthographic Size** | 5.625 (180 ÷ 16 ÷ 2) |
+| **Pixel Perfect Camera** | Assets PPU 16 · Ref Res 320×180 · Pixel Snapping On |
+
+> **PPU math**: world size = sprite pixels ÷ 16. A 16 px body = 1.0 unit = 1 tile; 24 px = 1.5 units. Transparent canvas padding does **not** scale a sprite — only the drawn body's pixel size does. Draw every frame of a character on the **same canvas size** so frames stay aligned.
+>
+> **Camera**: to see a full 180 px tall at 16 PPU the orthographic size must be `180 ÷ 16 ÷ 2 = 5.625`. A size of `5` only shows 160 px.
+
+#### Sprite Canvas Specs — Entities
+
+| Entity | Body (visible) | Canvas | Footprint |
+|--------|----------------|--------|-----------|
+| **Player** | 16×24 px | 32×32 px | 1.0 × 1.5 tiles |
+| **Small enemy** (Chaser) | 16×24 px | 32×32 px | 1.0 × 1.5 tiles |
+| **Medium enemy** (Shooter, Rusher) | 16×24 px | 32×32 px | 1.0 × 1.5 tiles |
+| **Large enemy** (Tank) | 24×32 px | 48×48 px | 1.5 × 2.0 tiles |
+| **Boss** | 48×48 px | 64×64 px | 3.0 × 3.0 tiles |
+
+#### Sprite Canvas Specs — Weapons, Pickups & Projectiles
+
+| Asset | Canvas | Body (visible) | Pivot |
+|-------|--------|----------------|-------|
+| Held gun — pistol / short | 16×16 px | ~8×12 px | Bottom-Center (grip) |
+| Held gun — rifle (Mosin) | 16×24 px | ~7×18 px | Bottom-Center (grip) |
+| Held melee (Katana) | 16×24 px | ~5×18 px | Bottom-Center (grip) |
+| Weapon UI icon (`WeaponData._icon`) | 16×16 px | ~14×14 px | Center |
+| Modifier / powerup pickup | 16×16 px | ~12×12 px | Center |
+| Projectile / bullet | 8×8 px | ~4×6 px | Center |
+| Muzzle flash (`MuzzleFlash.png`) | 14×16 px | — | Center |
+
+> **Weapons are drawn pointing up (+Y) with a Bottom-Center (grip) pivot.** `WeaponSocket` is rotated −90° and the barrel (`Muzzle`) sits on local +Y, so the sprite rotates into the aim direction.
+>
+> **Draw at final size — never use `localScale` to resize pixel art.** The current `ProjectileWeapon` (0.46) and `Projectile` (0.3) transform scales distort pixels; reset them to `1` once real sprites exist.
+>
+> **Sorting**: held weapon `Order in Layer +1` (in front of the player); floor pickups `−1` (behind the player).
+
+#### Sprite Import Settings (apply to every sprite)
+
+| Setting | Value |
+|---------|-------|
+| Texture Type | Sprite (2D and UI) |
+| Sprite Mode | Multiple (sprite sheets) / Single (one-offs) |
+| Pixels Per Unit | 16 |
+| Filter Mode | Point (no filter) |
+| Compression | None |
+| Generate Mip Maps | Off |
+| Wrap Mode | Clamp |
+| Mesh Type | Full Rect |
+| Pivot | Center (default) · Bottom-Center for held weapons — see table above |
+
+> **Colliders are independent of the art.** Use a `CircleCollider2D` at the feet (~0.35 radius) — never a box that matches the full sprite.
 
 ### Branches
 
@@ -348,6 +399,8 @@ result = baseValue
 |--------|----------|
 | `ModifierPickup` | `IInteractable` → adds permanent modifier → destroys self |
 | `TemporaryModifierPickup` | `IInteractable` → adds temporary modifier with duration → destroys self |
+
+> Each modifier shows a **unique 16×16 icon** (see §1 → Sprite Canvas Specs — Weapons, Pickups & Projectiles). Both pickup prefabs currently reuse a single tinted square; replace it with a per-modifier sprite.
 
 **Status**: ✅ Complete
 
@@ -640,6 +693,7 @@ Attacking
 | `com.unity.2d.spriteshape` | 13.0.0 |
 | `com.unity.2d.psdimporter` | 12.0.2 |
 | `com.unity.2d.aseprite` | 3.0.2 |
+| `com.unity.2d.pixel-perfect` | 5.1.1 |
 
 ---
 
@@ -753,7 +807,7 @@ Attacking
 
 | Gap | Priority | Description |
 |-----|----------|-------------|
-| **Player Sprite** | 🔴 High | Cyan placeholder square |
+| **Player Sprite** | ✅ Done | 18×26 px body, 16 PPU, Point filter (`Player 1.png`) — see §13 |
 | **Enemy Sprites** | 🔴 High | Red placeholder square — one sprite for all types |
 | **Room Tilemap** | 🔴 High | No environment tiles — empty scenes |
 | **Door Sprites** | 🟡 Medium | No visual door objects |
@@ -907,6 +961,11 @@ Attacking
 | Asset | Notes |
 |-------|-------|
 | `MuzzleFlash.png` | Weapon VFX |
+| `Player 1.png` | Player entity — 18×26 px body @ 16 PPU |
+
+> **Planned entity sprites** — canvas sizes defined in [§1 → Sprite Canvas Specs](#visual-specs): Chaser 32×32, Shooter/Rusher 32×32, Tank 48×48, Boss 64×64. All imported at 16 PPU, Point filter, no compression. (Enemy still uses the placeholder square — see gap 10.5.)
+>
+> **Planned item sprites** — weapon world sprites + UI icons, a unique 16×16 icon per modifier, and an 8×8 bullet (specs in [§1 → Sprite Canvas Specs — Weapons, Pickups & Projectiles](#visual-specs)).
 
 ### Prefabs
 

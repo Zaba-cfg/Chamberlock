@@ -13,12 +13,11 @@ MonoBehaviour:
   m_Name: Mosin
   m_EditorClassIdentifier: Assembly-CSharp::WeaponData
   _weaponName: Mosin
-  _icon: {fileID: 0}
+  _icon: {fileID: 6199640236988154992, guid: 44d71792c886a4f4f93bf20785fcf1c8, type: 3}
   _damage: 30
   _fireRate: 1
   _magazineSize: 5
   _reloadDuration: 5
   _maxReserveAmmo: 15
-  _spreadAngle: 10
   _weaponFireStrategy: {fileID: 11400000, guid: dacc133eb8057f54582c8a89360d2d43, type: 2}
   _ammoType: 0

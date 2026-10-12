@@ -13,12 +13,11 @@ MonoBehaviour:
   m_Name: Colt
   m_EditorClassIdentifier: Assembly-CSharp::WeaponData
   _weaponName: Colt
-  _icon: {fileID: 0}
+  _icon: {fileID: 6648483451221130605, guid: 40c999de8d5f7a64c84895ef4351674c, type: 3}
   _damage: 5
   _fireRate: 10
   _magazineSize: 30
   _reloadDuration: 5
   _maxReserveAmmo: 90
-  _spreadAngle: 70
   _weaponFireStrategy: {fileID: 11400000, guid: dacc133eb8057f54582c8a89360d2d43, type: 2}
   _ammoType: 0
