@@ -8,6 +8,7 @@ namespace Systems.Game
     [RequireComponent(typeof(RunManager))]
     [RequireComponent(typeof(SceneLoader))]
     [RequireComponent(typeof(AudioManager))]
+    [RequireComponent(typeof(PauseInput))]
     
     public class Bootstrap : MonoBehaviour
     {
