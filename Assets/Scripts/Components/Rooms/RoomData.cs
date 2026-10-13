@@ -8,10 +8,12 @@ namespace Components.Rooms
     {
         [SerializeField] private RoomType _roomType;
         [SerializeField] private Vector2Int _dimensions = new(20, 11);
-        [SerializeField] private List<EnemyWave> _enemyWaves = new();
+        [SerializeField] private List<EnemySpawnEntry> _enemies = new();
+        [SerializeField] private GameObject _itemPickupPrefab;
 
         public RoomType RoomType => _roomType;
         public Vector2Int Dimensions => _dimensions;
-        public IReadOnlyList<EnemyWave> EnemyWaves => _enemyWaves;
+        public IReadOnlyList<EnemySpawnEntry> Enemies => _enemies;
+        public GameObject ItemPickupPrefab => _itemPickupPrefab;
     }
 }

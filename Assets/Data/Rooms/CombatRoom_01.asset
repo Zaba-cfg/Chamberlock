@@ -14,10 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Components.Rooms.RoomData
   _roomType: 1
   _dimensions: {x: 20, y: 11}
-  _enemyWaves:
-  - _entries:
-    - _enemyPrefab: {fileID: 2976969469855400215, guid: 4ff166974f9a6f24b98e3f8d16b90577, type: 3}
-      _count: 1
-    - _enemyPrefab: {fileID: 2976969469855400215, guid: 4ff166974f9a6f24b98e3f8d16b90577, type: 3}
-      _count: 1
-    _spawnDelay: 10
+  _enemies:
+  - _enemyPrefab: {fileID: 2976969469855400215, guid: 4ff166974f9a6f24b98e3f8d16b90577, type: 3}
+    _count: 2

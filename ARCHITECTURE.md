@@ -162,7 +162,7 @@ Start Room → [Combat Room → Item Room] × N → Boss Room → Victory / Game
 | Phase | Description |
 |-------|-------------|
 | **1. Start Room** | Entry point. No enemies, no pickups. Prepare and move forward. |
-| **2. Combat Room** | Doors lock on entry. Waves of enemies spawn. Clear all enemies to unlock doors and proceed. |
+| **2. Combat Room** | Doors lock on entry. Enemies spawn. Clear all enemies to unlock doors and proceed. |
 | **3. Item Room** | Contains a weapon or modifier pickup. No enemies. Choose your reward. |
 | **4. Repeat** | Cycle through combat and item rooms, growing stronger with each clear. |
 | **5. Boss Room** | Final encounter. Multi-phase boss with unique attack patterns. Defeat it to complete the run. |
@@ -246,10 +246,11 @@ Scripts/
 │   ├── PlayerInput/     # Unity Input System bridge
 │   │   ├── PlayerInput.cs, AimDevice.cs
 │   ├── Projectile/      # Projectile.cs, ProjectileFireStrategy.cs
-│   └── Rooms/           # Room system (3A core done, 3B map pending)
-│       ├── RoomType.cs (enum), DoorDirection.cs (enum)
+│   └── Rooms/           # Room system (3A core, 3B map, 3C spawner)
+│       ├── RoomType.cs, DoorDirection.cs, SpawnPointKind.cs (enums)
 │       ├── RoomController.cs, RoomDoor.cs, RoomEnemy.cs, RoomDebugger.cs
-│       ├── EnemyWave.cs
+│       ├── RoomEnemySpawner.cs, RoomItemSpawner.cs, RoomSpawnPoint.cs
+│       ├── EnemySpawnEntry.cs
 │       └── RoomData.cs (ScriptableObject)
 ├── Map/                  # (3B) MapData.cs, MapRoomEntry.cs, RoomDoorLink.cs,
 │                         # DungeonManager.cs, RoomCamera.cs
@@ -602,35 +603,38 @@ GameplayCanvas
 
 > Reference: *The Binding of Isaac* — rooms are the core spatial unit.
 
-**Files**: `Components/Rooms/` — `RoomController.cs`, `RoomDoor.cs`, `RoomData.cs`, `RoomEnemy.cs`, `EnemyWave.cs`, `RoomType.cs`, `DoorDirection.cs`, `RoomDebugger.cs`. Map: `Components/Map/` — `MapData.cs`, `MapRoomEntry.cs`, `RoomDoorLink.cs`, `DungeonManager.cs`, `RoomCamera.cs`; `UI/RoomTransition/RoomTransitionOverlay.cs`.
+**Files**: `Components/Rooms/` — `RoomController.cs`, `RoomDoor.cs`, `RoomData.cs`, `RoomEnemy.cs`, `RoomEnemySpawner.cs`, `RoomItemSpawner.cs`, `RoomSpawnPoint.cs`, `EnemySpawnEntry.cs`, `RoomType.cs`, `DoorDirection.cs`, `SpawnPointKind.cs`, `RoomDebugger.cs`. Map: `Components/Map/` — `MapData.cs`, `MapRoomEntry.cs`, `RoomDoorLink.cs`, `DungeonManager.cs`, `RoomCamera.cs`; `UI/RoomTransition/RoomTransitionOverlay.cs`.
 
 #### Room Types
 | Type | Behavior |
 |------|----------|
 | **Combat** | Spawns enemies. Exits lock. Clear all enemies to unlock. |
 | **Item** | Contains a weapon or modifier pickup. No enemies. |
-| **Boss** | Final room. Boss enemy with phases. Clears = map complete. |
+| **Boss** | Final room. Boss enemy with phases. Clears = map complete (ends the run). |
 | **Start** | Entry point. No enemies, no pickups. |
 
 #### Room Controller
-- `RoomData` (ScriptableObject): room type, tile dimensions, enemy wave definitions (`EnemyWave` / `EnemyWaveEntry`).
+- `RoomData` (ScriptableObject): room type, tile dimensions, the enemy spawn list (`EnemySpawnEntry`: prefab + count), and an optional `ItemPickupPrefab` (a weapon prefab or a `ModifierPickup` prefab).
 - `RoomController` (MonoBehaviour): state machine `Idle → Active → Cleared`. Activates when the player enters the room's trigger collider (or explicitly via the DungeonManager). Only `Combat`/`Boss` rooms lock; `Start`/`Item` never lock and never count.
 - `RoomDoor`: a `Collider2D` **trigger** detects the player; a child `Blocker` collider is enabled only while locked. Unlocked/cleared rooms stay unlocked.
 - `RoomEnemy`: registrar on each enemy — finds its parent `RoomController`, registers on enable, forwards `Health.Died`. Keeps death accounting off `DestroyOnDeath`'s ordering.
-- Clearing the last tracked enemy → unlock doors, fire `RoomCleared`, call `RunManager.AddRoomCleared()`.
+- `RoomEnemySpawner` / `RoomItemSpawner`: on `RoomActivated`, spawn once from `RoomData` at the room's `RoomSpawnPoint`s filtered by `SpawnPointKind` (`Enemy` / `Item`). Enemies parent under the spawn root so `RoomEnemy` can find the room; the item pickup parents under the room so a taken pickup can never respawn (`Activate()` fires once per cached instance).
+- Clearing the last tracked enemy → unlock doors, fire `RoomCleared`, call `RunManager.AddRoomCleared()`. The clear check runs whenever an enemy leaves the tracked set (death *or* removal), so it does not depend on `DestroyOnDeath` firing `Died` before it destroys the enemy.
+- Clearing a `RoomType.Boss` room also completes the run: `RoomController.CompleteRun()` calls `RunManager.EndRun()` then `GameManager.SetState(GameState.GameOver)`. This is a placeholder that reuses the existing Game Over screen (stats + Restart / Main Menu); the dedicated victory screen is 5.5.
 
 #### Map & Transitions
 - `MapData` (ScriptableObject): ordered `MapRoomEntry` list — each entry = `RoomData` + room prefab + `worldPosition` + explicit `RoomDoorLink`s (`from` direction → `toRoomIndex` → `to` direction).
-- **Discrete rooms**: one active room prefab is instantiated at a time. `DungeonManager` spawns the entry room, subscribes to its doors, and on a linked door crossing: fade out → destroy the old room → instantiate the next → teleport the player just inside the arrival door → `Activate()` → snap camera → fade in.
+- **Discrete rooms**: one active room prefab at a time. `DungeonManager` instantiates the entry room, subscribes to its doors, and on a linked door crossing: fade out → deactivate the current room → activate (or first-time instantiate) the next → teleport the player just inside the arrival door → `Activate()` → snap camera → fade in.
+- **Room caching (backtracking)**: visited rooms are cached in a dictionary and only deactivated, never destroyed, so their state persists — dead enemies stay dead, a dropped weapon stays on the floor, a taken pickup does not come back. `Activate()` is idempotent, so a cleared room re-shown does not re-lock or re-spawn.
 - `RoomCamera` locks the view to the active room root (no player-follow); `RoomTransitionOverlay` (CanvasGroup) provides the black fade and blocks input during a swap.
-- Notes: `RoomDoorLink`s are directional (forward-only in the linear test map). Unlinked doors do nothing. A room needs a door matching each link's `to` direction.
+- `RoomDoorLink`s are authored **forward**; `DungeonManager` builds a runtime connection table and adds the reverse of every link automatically. `RoomDoorLink._oneWay` opts a link out of auto-reverse (e.g. a boss door that seals behind you). A room needs a door matching each link's `to` direction.
 
 #### Room Generator (Future)
 - If procedural generation is added later: `RoomGenerator` picks from a pool of room templates
 - Templates are pre-built tilemap rooms with spawn points
 - Generator connects them in a valid graph
 
-**Status**: 🚧 In progress — 3.1–3.5 complete (room core + map/transitions verified); 3.7–3.9 (spawner/content rooms) and 3.6 (tilemap) not started.
+**Status**: 🚧 In progress — 3.1–3.5 (room core + map/transitions), 3.7 (enemy spawner), 3.8 (item room), 3.9 (start room), 3.10 (backtracking) and the boss-room run end are complete; 3.6 (tilemap) pending. Clearing a `Boss` room ends the run (reuses the Game Over screen; dedicated victory screen is 5.5).
 
 ---
 
@@ -794,7 +798,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 |-------|----------|--------|----------|
 | **Bootstrap** | ✅ Yes (index 0) | Entry | `Persistent` object: `GameManager`, `RunManager`, `SceneLoader`, `PauseInput`, `AudioManager`, `Bootstrap` |
 | **MainMenu** | ✅ Yes (index 1) | ✅ Done | Main Menu UI (Title, New Game, Settings, Quit) + shared Settings panel (prefab instance) |
-| **Gameplay** | ✅ Yes (index 2) | 🚧 WIP | Player, one Enemy, `PoolManager`, weapon pickups, Pause/Settings UI, HUD (health / timer / weapon) and Game Over overlay. Room core + test rooms done (3A); map-driven room spawning pending (3B). |
+| **Gameplay** | ✅ Yes (index 2) | 🚧 WIP | Player, `PoolManager`, weapon pickups, Pause/Settings UI, HUD (health / timer / weapon) and Game Over overlay. Room system + map-driven room swapping done (3A/3B); combat rooms spawn from `RoomData` (3C.1). |
 | **SampleScene** | ✅ Yes (index 3) | Legacy sandbox | Original test scene (played directly, no `GameManager`) — not part of the game flow |
 
 > **Always press Play from `Bootstrap`** (build index 0). The persistent managers are created there; the other scenes rely on them surviving the scene load (see §4.16).
@@ -891,8 +895,12 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | Audio Manager | ✅ Done | `Systems/Audio` — music + SFX layers; mixer volume driven by `GameSettings` |
 | HUD | ✅ Done | `Scripts/UI/HUD` — health bar, run timer, weapon HUD |
 | Death Handling | ✅ Done | Enemy destroyed + kill counted; player death → run end + `GameOver` |
-| Room Core | ✅ Done | `Components/Rooms` — RoomData/RoomController/RoomDoor/RoomEnemy/EnemyWave; lock/clear verified (`8a0de8d`) |
+| Room Core | ✅ Done | `Components/Rooms` — RoomData/RoomController/RoomDoor/RoomEnemy; lock/clear verified (`8a0de8d`) |
 | Map & Transitions | ✅ Done | `Components/Map` — MapData/DungeonManager/RoomCamera + fade overlay; map-driven room swapping verified |
+| Enemy Spawner | ✅ Done | `Components/Rooms` — `RoomEnemySpawner` + `RoomSpawnPoint`/`EnemySpawnEntry`; combat rooms spawn once from `RoomData.Enemies` |
+| Backtracking | ✅ Done | Rooms cached (never destroyed) + auto-reversed door links; cleared state, drops, and taken pickups persist |
+| Item Spawner | ✅ Done | `Components/Rooms` — `RoomItemSpawner` + `RoomData.ItemPickupPrefab`; item rooms spawn one weapon/modifier on enter |
+| Boss Room (placeholder) | ✅ Done | `Room_Boss` + `BossRoom` (`RoomType.Boss`, one enemy) — same `RoomEnemySpawner`; clearing it ends the run via the Game Over flow. Real multi-phase boss is 5.2 |
 
 ---
 
@@ -902,11 +910,10 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 
 | Gap | Category | Priority | Roadmap |
 |-----|----------|----------|---------|
-| **Room system** — rooms, doors, lock/clear | Core | 🔴 High | 3.1–3.3 ✅, 3.7–3.9 pending |
+| **Room system** — rooms, doors, lock/clear | Core | 🔴 High | 3.1–3.3 ✅, 3.7–3.9 ✅ |
 | **Map structure** — room sequence + transitions | Core | 🔴 High | 3.4–3.5 ✅ |
-| **Enemy spawner** — wave/room-based spawning | Core | 🔴 High | 4.6 (uses 3.7 waves) |
 | **Enemy types** — Chaser, Shooter, Rusher, Robber, Tank | Core | 🔴 High | 4.2–4.5, 7.3 |
-| **Boss** — room, multi-phase enemy | Core | 🔴 High | 5.1–5.5 |
+| **Boss** — multi-phase enemy | Core | 🔴 High | 5.2–5.5 |
 | **Room tilemap** — walls, floor, door sockets | Visual | 🔴 High | 3.6, 6.3 |
 | **Modifier HUD** — active modifiers + duration | UI | 🟡 Medium | 6.9 |
 | **Door sprites** | Visual | 🟡 Medium | — |
@@ -965,15 +972,16 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 
 | # | Task | Description | Depends On |
 |---|------|-------------|------------|
-| 3.1 | **RoomData (SO)** ✅ | Room type, dimensions, door positions, enemy wave definitions. | — |
+| 3.1 | **RoomData (SO)** ✅ | Room type, dimensions, door positions, enemy spawn list. | — |
 | 3.2 | **RoomController** ✅ | Tracks enemies alive. `RoomCleared` event. Lock/unlock doors. | 1.2 |
 | 3.3 | **RoomDoor** ✅ | Collider2D trigger. Locks on room enter, unlocks on room clear. | 3.2 |
 | 3.4 | **Map Structure** ✅ | Linear room sequence: Start → Combat → Item → Combat → ... → Boss. `MapData`/`MapRoomEntry`/`RoomDoorLink` + editor `Map_Test`. | 3.1, 3.2 |
 | 3.5 | **Room Transitions** ✅ | Player enters door → fade → swap room → teleport → camera frame. `DungeonManager`/`RoomCamera`/`RoomTransitionOverlay`. | 3.4, 1.4 |
 | 3.6 | **Room Tilemap** | Base room template: walls, floor, door sockets. 16×16 tileset. | 3.1 |
-| 3.7 | **Combat Room** | Spawns enemy waves on enter. Clears when all enemies dead. | 3.2, 2.1 |
-| 3.8 | **Item Room** | Contains weapon or modifier pickup. No enemies. | 3.2 |
-| 3.9 | **Start Room** | Entry point. No enemies, no pickups. | 3.2 |
+| 3.7 | **Combat Room** ✅ | Spawns enemies (once) on enter. Clears when all enemies dead. `RoomEnemySpawner`. | 3.2, 2.1 |
+| 3.8 | **Item Room** ✅ | Contains a weapon or modifier pickup. No enemies. `RoomItemSpawner` + `RoomData.ItemPickupPrefab`. | 3.2 |
+| 3.9 | **Start Room** ✅ | Entry point. No enemies, no pickups. `Room_Start` + `StartRoom`. | 3.2 |
+| 3.10 | **Backtracking** ✅ | Revisit cleared rooms; room state persists (dead enemies stay dead, dropped items stay). | 3.5 |
 
 ### Phase 4: Enemy Variety (🟡 Important)
 
@@ -986,7 +994,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | 4.3 | **Shooter Enemy** | Maintains distance. Fires projectiles at player. | 2.1, 1.1 |
 | 4.4 | **Rusher Enemy** | Telegraphs, then charges in a line. Melee only. Brief stun after. | 2.1 |
 | 4.5 | **Robber Enemy** | Steals player weapon if equipped, flees, then shoots. Hides if player unarmed. | 2.1, 1.1 |
-| 4.6 | **Enemy Spawner** | Room-level spawner. Spawns waves from `RoomData` definitions. | 3.7 |
+| 4.6 | **Enemy Spawner** ✅ | Room-level spawner. Spawns enemies from `RoomData` definitions. | 3.7 |
 
 ### Phase 5: Boss & Progression (🟡 Important)
 
@@ -997,7 +1005,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | 5.1 | **Boss Room** | Special room type. Triggers boss encounter on enter. | 3.2 |
 | 5.2 | **Boss Enemy** | Multi-phase enemy. Unique attack patterns per phase. High HP. | 4.1 |
 | 5.3 | **Boss Phases** | Phase transitions: HP thresholds trigger new attack patterns, telegraph, UI. | 5.2 |
-| 5.5 | **Map Complete** | Boss death → victory screen → back to main menu. | 5.2, 2.6 |
+| 5.5 | **Map Complete** 🚧 | Boss death → victory screen → back to main menu. Placeholder done: clearing a `Boss` room already ends the run (reuses the Game Over screen). Dedicated victory screen still pending. | 5.2, 2.6 |
 
 ### Phase 6: Polish & Juice (🟢 Nice to Have)
 

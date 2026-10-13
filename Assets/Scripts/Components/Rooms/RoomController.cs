@@ -59,6 +59,9 @@ namespace Components.Rooms
                 LockDoors();
 
             RoomActivated?.Invoke();
+
+            if (RequiresCombat)
+                ClearIfEmpty();
         }
 
         public void RegisterEnemy(RoomEnemy enemy)
@@ -75,6 +78,7 @@ namespace Components.Rooms
                 return;
 
             _enemies.Remove(enemy);
+            ClearIfEmpty();
         }
 
         public void NotifyEnemyDied(RoomEnemy enemy)
@@ -83,7 +87,11 @@ namespace Components.Rooms
                 return;
 
             _enemies.Remove(enemy);
+            ClearIfEmpty();
+        }
 
+        private void ClearIfEmpty()
+        {
             if (_state == RoomState.Active && _enemies.Count == 0)
                 ClearRoom();
         }
@@ -103,6 +111,20 @@ namespace Components.Rooms
                 RunManager.Instance.AddRoomCleared();
 
             RoomCleared?.Invoke();
+
+            if (_data.RoomType == RoomType.Boss)
+                CompleteRun();
+        }
+
+        private void CompleteRun()
+        {
+            if (GameManager.Instance == null)
+                return;
+
+            if (RunManager.Instance != null)
+                RunManager.Instance.EndRun();
+
+            GameManager.Instance.SetState(GameState.GameOver);
         }
 
         private void LockDoors()

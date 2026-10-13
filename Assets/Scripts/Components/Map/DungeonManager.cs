@@ -14,9 +14,11 @@ namespace Components.Map
         [SerializeField] private MapData _map;
         [SerializeField] private RoomCamera _camera;
         [SerializeField] private RoomTransitionOverlay _overlay;
-        [SerializeField, Min(0f)] private float _playerSpawnDistance = 1f;
+        [SerializeField, Min(0f)] private float _playerSpawnDistance = 1.5f;
 
-        private readonly List<RoomDoor> _subscribedDoors = new();
+        private readonly Dictionary<int, RoomController> _rooms = new();
+        private readonly Dictionary<(int, DoorDirection), RoomConnection> _connections = new();
+        private List<RoomDoor> _activeDoors = new();
         private Player _player;
         private Movement _playerMovement;
         private Rigidbody2D _playerBody;
@@ -26,6 +28,18 @@ namespace Components.Map
         private bool _isTransitioning;
 
         public static DungeonManager Instance { get; private set; }
+
+        private readonly struct RoomConnection
+        {
+            public RoomConnection(int roomIndex, DoorDirection arrival)
+            {
+                RoomIndex = roomIndex;
+                Arrival = arrival;
+            }
+
+            public int RoomIndex { get; }
+            public DoorDirection Arrival { get; }
+        }
 
         private void Awake()
         {
@@ -44,6 +58,7 @@ namespace Components.Map
                 throw new MissingReferenceException($"{name}: {_map.name} has no rooms.");
 
             ValidateMap();
+            BuildConnections();
 
             _player = FindFirstObjectByType<Player>();
 
@@ -59,10 +74,7 @@ namespace Components.Map
 
         private void Start()
         {
-            SpawnRoom(0);
-            _activeRoom.Activate();
-            _camera.Frame(_activeRoom);
-
+            ShowRoom(0, null);
             TeleportPlayer(_activeRoom.transform.position);
         }
 
@@ -90,35 +102,44 @@ namespace Components.Map
             }
         }
 
+        private void BuildConnections()
+        {
+            for (int i = 0; i < _map.Rooms.Count; i++)
+            {
+                foreach (RoomDoorLink link in _map.Rooms[i].Links)
+                    _connections[(i, link.From)] = new RoomConnection(link.ToRoomIndex, link.To);
+            }
+
+            for (int i = 0; i < _map.Rooms.Count; i++)
+            {
+                foreach (RoomDoorLink link in _map.Rooms[i].Links)
+                {
+                    if (link.OneWay)
+                        continue;
+
+                    _connections.TryAdd((link.ToRoomIndex, link.To), new RoomConnection(i, link.From));
+                }
+            }
+        }
+
         private void HandleDoorEntered(RoomDoor door)
         {
             if (_isTransitioning)
                 return;
 
-            MapRoomEntry entry = _map.Rooms[_activeRoomIndex];
-
-            foreach (RoomDoorLink link in entry.Links)
-            {
-                if (link.From != door.Direction)
-                    continue;
-
-                StartCoroutine(TransitionTo(link));
-                return;
-            }
+            if (_connections.TryGetValue((_activeRoomIndex, door.Direction), out RoomConnection target))
+                StartCoroutine(TransitionTo(target));
         }
 
-        private IEnumerator TransitionTo(RoomDoorLink link)
+        private IEnumerator TransitionTo(RoomConnection target)
         {
             _isTransitioning = true;
             SetPlayerMovement(false);
 
             yield return _overlay.FadeOut();
 
-            DestroyActiveRoom();
-            SpawnRoom(link.ToRoomIndex);
-            PlacePlayerAtDoor(link.To);
-            _activeRoom.Activate();
-            _camera.Frame(_activeRoom);
+            HideActiveRoom();
+            ShowRoom(target.RoomIndex, target.Arrival);
 
             yield return _overlay.FadeIn();
 
@@ -126,11 +147,32 @@ namespace Components.Map
             _isTransitioning = false;
         }
 
-        private void SpawnRoom(int index)
+        private void ShowRoom(int index, DoorDirection? arrival)
         {
             if (index < 0 || index >= _map.Rooms.Count)
                 throw new ArgumentOutOfRangeException(nameof(index), $"{name}: no room at index {index}.");
 
+            if (!_rooms.TryGetValue(index, out RoomController room))
+            {
+                room = InstantiateRoom(index);
+                _rooms.Add(index, room);
+            }
+
+            room.gameObject.SetActive(true);
+
+            _activeRoom = room;
+            _activeRoomIndex = index;
+            _activeDoors = new List<RoomDoor>(room.GetComponentsInChildren<RoomDoor>(true));
+
+            if (arrival.HasValue)
+                PlacePlayerAtDoor(arrival.Value);
+
+            room.Activate();
+            _camera.Frame(room);
+        }
+
+        private RoomController InstantiateRoom(int index)
+        {
             MapRoomEntry entry = _map.Rooms[index];
 
             if (entry.RoomPrefab == null)
@@ -138,34 +180,23 @@ namespace Components.Map
 
             GameObject instance = Instantiate(entry.RoomPrefab, (Vector3)entry.WorldPosition, Quaternion.identity, _roomsRoot);
 
-            _activeRoom = instance.GetComponent<RoomController>();
-
-            if (_activeRoom == null)
+            if (!instance.TryGetComponent(out RoomController room))
                 throw new MissingReferenceException($"{name}: room '{entry.RoomPrefab.name}' has no RoomController.");
 
-            _activeRoomIndex = index;
-
             foreach (RoomDoor door in instance.GetComponentsInChildren<RoomDoor>(true))
-            {
                 door.PlayerEntered += HandleDoorEntered;
-                _subscribedDoors.Add(door);
-            }
+
+            return room;
         }
 
-        private void DestroyActiveRoom()
+        private void HideActiveRoom()
         {
-            foreach (RoomDoor door in _subscribedDoors)
-            {
-                if (door != null)
-                    door.PlayerEntered -= HandleDoorEntered;
-            }
+            if (_activeRoom == null)
+                return;
 
-            _subscribedDoors.Clear();
-
-            if (_activeRoom != null)
-                Destroy(_activeRoom.gameObject);
-
+            _activeRoom.gameObject.SetActive(false);
             _activeRoom = null;
+            _activeDoors.Clear();
         }
 
         private void PlacePlayerAtDoor(DoorDirection direction)
@@ -189,7 +220,7 @@ namespace Components.Map
 
         private RoomDoor FindDoor(DoorDirection direction)
         {
-            foreach (RoomDoor door in _subscribedDoors)
+            foreach (RoomDoor door in _activeDoors)
             {
                 if (door.Direction == direction)
                     return door;

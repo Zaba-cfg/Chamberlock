@@ -10,9 +10,11 @@ namespace Components.Map
         [SerializeField] private DoorDirection _from;
         [SerializeField, Min(0)] private int _toRoomIndex;
         [SerializeField] private DoorDirection _to;
+        [SerializeField] private bool _oneWay;
 
         public DoorDirection From => _from;
         public int ToRoomIndex => _toRoomIndex;
         public DoorDirection To => _to;
+        public bool OneWay => _oneWay;
     }
 }
