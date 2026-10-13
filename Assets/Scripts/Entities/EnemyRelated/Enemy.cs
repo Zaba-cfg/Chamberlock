@@ -1,12 +1,12 @@
 using Components.Base;
 using Components.Base.HealthRelated;
 using Components.Base.Weapon;
-using Components.Enemy;
-using Components.Enemy.EnemyBehavior;
+using Components.EnemyComponents;
+using Components.EnemyComponents.EnemyBehaviorRelated;
 using Components.Weapons;
 using UnityEngine;
 
-namespace Entities.Enemy
+namespace Entities.EnemyRelated
 {
     [RequireComponent(typeof(EnemyAIInput))]
     [RequireComponent(typeof(Movement))]

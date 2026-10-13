@@ -2,7 +2,7 @@ using Components.Base;
 using Components.Weapons;
 using UnityEngine;
 
-namespace Components.Enemy.EnemyBehavior
+namespace Components.EnemyComponents.EnemyBehaviorRelated
 {
     [RequireComponent(typeof(EnemyAIInput))]
     [RequireComponent(typeof(EnemyCombat))]
@@ -21,6 +21,15 @@ namespace Components.Enemy.EnemyBehavior
         private WeaponHolder _weaponHolder;
     
         [SerializeField] private Transform _target;
+        public Transform Target => _target;
+
+        public void SetTarget(Transform target)
+        {
+            if (target == null)
+                throw new System.ArgumentNullException(nameof(target));
+
+            _target = target;
+        }
 
         private void Awake()
         {

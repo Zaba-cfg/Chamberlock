@@ -133,7 +133,7 @@
 
 ### 2.1 The Idea
 
-A **2D top-down roguelite dungeon crawler** inspired by *The Binding of Isaac* and *Enter The Gungeon*. The player explores a dungeon composed of rooms, fighting enemies with a variety of weapons and collecting modifiers that alter their stats and abilities. Each run is unique due to random weapon drops, modifier combinations, and enemy encounters.
+A **2D top-down roguelite dungeon crawler** inspired by *The Binding of Isaac* and *Enter The Gungeon*. The player explores a dungeon composed of rooms, fighting enemies with a variety of weapons and collecting modifiers that alter their stats and abilities. Each run is unique due to random weapon pickups, modifier combinations, and enemy encounters.
 
 ### 2.2 The Concept
 
@@ -161,7 +161,7 @@ Start Room → [Combat Room → Item Room] × N → Boss Room → Victory / Game
 
 | Phase | Description |
 |-------|-------------|
-| **1. Start Room** | Entry point. No enemies, no loot. Prepare and move forward. |
+| **1. Start Room** | Entry point. No enemies, no pickups. Prepare and move forward. |
 | **2. Combat Room** | Doors lock on entry. Waves of enemies spawn. Clear all enemies to unlock doors and proceed. |
 | **3. Item Room** | Contains a weapon or modifier pickup. No enemies. Choose your reward. |
 | **4. Repeat** | Cycle through combat and item rooms, growing stronger with each clear. |
@@ -288,7 +288,7 @@ Scripts/
 
 | Component | Owner | Behaviour |
 |-----------|-------|-----------|
-| `DestroyOnDeath` | Enemy | Destroys the GameObject (no loot, no animation yet) |
+| `DestroyOnDeath` | Enemy | Destroys the GameObject (no animation yet) |
 | `EnemyKillCounter` (`Components.Enemy`) | Enemy | `RunManager.AddKill()` — feeds the run's kill stat |
 | `PlayerDeathHandler` (`Components.Player`) | Player | `RunManager.EndRun()` → `GameManager.SetState(GameOver)` |
 
@@ -608,10 +608,10 @@ GameplayCanvas
 | **Combat** | Spawns enemies. Exits lock. Clear all enemies to unlock. |
 | **Item** | Contains a weapon or modifier pickup. No enemies. |
 | **Boss** | Final room. Boss enemy with phases. Clears = map complete. |
-| **Start** | Entry point. No enemies, no loot. |
+| **Start** | Entry point. No enemies, no pickups. |
 
 #### Room Controller
-- `RoomData` (ScriptableObject): room type, enemy wave definitions, loot tables
+- `RoomData` (ScriptableObject): room type, enemy wave definitions
 - `RoomController` (MonoBehaviour): tracks enemies alive, fires `RoomCleared` event
 - Doors are `Collider2D` triggers — disabled when room is locked
 - On player enter → lock doors, spawn enemies. On all enemies dead → unlock doors.
@@ -682,7 +682,7 @@ Attacking
 ```
 
 - Each type is a `MonoBehaviour` that inherits from or composes `EnemyBehavior`
-- `EnemyData` (ScriptableObject) per type: speed, HP, attack pattern, sprite, drop table
+- `EnemyData` (ScriptableObject) per type: speed, HP, attack pattern, sprite
 - `EnemyCombat` adapts per type (some use `WeaponHolder`, some use custom logic)
 
 **Status**: 🔲 Not started
@@ -903,10 +903,8 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | **Map structure** — room sequence + transitions | Core | 🔴 High | 3.4–3.5 |
 | **Enemy spawner** — wave/room-based spawning | Core | 🔴 High | 4.6 |
 | **Enemy types** — Chaser, Shooter, Rusher, Robber, Tank | Core | 🔴 High | 4.2–4.5, 7.3 |
-| **Boss** — room, multi-phase enemy, drops | Core | 🔴 High | 5.1–5.5 |
+| **Boss** — room, multi-phase enemy | Core | 🔴 High | 5.1–5.5 |
 | **Room tilemap** — walls, floor, door sockets | Visual | 🔴 High | 3.6, 6.3 |
-| **Drop system** — loot on enemy death | Core | 🟡 Medium | 4.7 |
-| **Health pickup** | Core | 🟡 Medium | 4.8 |
 | **Modifier HUD** — active modifiers + duration | UI | 🟡 Medium | 6.9 |
 | **Door sprites** | Visual | 🟡 Medium | — |
 | **Animations** — idle / walk / attack / death | Visual | 🟡 Medium | 6.2 |
@@ -949,7 +947,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 
 | # | Task | Description | Depends On |
 |---|------|-------------|------------|
-| 2.1 | **Enemy Death Handling** ✅ | `Health.Died` → destroy + count kill (`DestroyOnDeath`, `EnemyKillCounter`). Animation / loot deferred. | 1.1, 1.2 |
+| 2.1 | **Enemy Death Handling** ✅ | `Health.Died` → destroy + count kill (`DestroyOnDeath`, `EnemyKillCounter`). Animation deferred. | 1.1, 1.2 |
 | 2.2 | **Player Death Handling** ✅ | `Health.Died` → `RunManager.EndRun()` + `GameOver` (input frozen by state). Animation deferred. | 1.2 |
 | 2.3 | **Health Bar UI** ✅ | Slider bound to `Health.HealthChanged`. | — |
 | 2.4 | **Run Timer UI** ✅ | Elapsed time (`mm:ss`) from `RunManager`. | 1.3 |
@@ -964,7 +962,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 
 | # | Task | Description | Depends On |
 |---|------|-------------|------------|
-| 3.1 | **RoomData (SO)** | Room type, dimensions, door positions, enemy wave definitions, loot table. | — |
+| 3.1 | **RoomData (SO)** | Room type, dimensions, door positions, enemy wave definitions. | — |
 | 3.2 | **RoomController** | Tracks enemies alive. `RoomCleared` event. Lock/unlock doors. | 1.2 |
 | 3.3 | **RoomDoor** | Collider2D trigger. Locks on room enter, unlocks on room clear. | 3.2 |
 | 3.4 | **Map Structure** | Linear room sequence: Start → Combat → Item → Combat → ... → Boss. | 3.1, 3.2 |
@@ -972,7 +970,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | 3.6 | **Room Tilemap** | Base room template: walls, floor, door sockets. 16×16 tileset. | 3.1 |
 | 3.7 | **Combat Room** | Spawns enemy waves on enter. Clears when all enemies dead. | 3.2, 2.1 |
 | 3.8 | **Item Room** | Contains weapon or modifier pickup. No enemies. | 3.2 |
-| 3.9 | **Start Room** | Entry point. No enemies, no loot. | 3.2 |
+| 3.9 | **Start Room** | Entry point. No enemies, no pickups. | 3.2 |
 
 ### Phase 4: Enemy Variety (🟡 Important)
 
@@ -980,14 +978,12 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 
 | # | Task | Description | Depends On |
 |---|------|-------------|------------|
-| 4.1 | **EnemyData (SO)** | Per-type stats: speed, HP, damage, attack pattern, sprite, drop table. | — |
+| 4.1 | **EnemyData (SO)** | Per-type stats: speed, HP, damage, attack pattern, sprite. | — |
 | 4.2 | **Chaser Enemy** | Moves toward player. Contact damage. Melee only. | 2.1 |
 | 4.3 | **Shooter Enemy** | Maintains distance. Fires projectiles at player. | 2.1, 1.1 |
 | 4.4 | **Rusher Enemy** | Telegraphs, then charges in a line. Melee only. Brief stun after. | 2.1 |
 | 4.5 | **Robber Enemy** | Steals player weapon if equipped, flees, then shoots. Hides if player unarmed. | 2.1, 1.1 |
 | 4.6 | **Enemy Spawner** | Room-level spawner. Spawns waves from `RoomData` definitions. | 3.7 |
-| 4.7 | **Drop System** | Enemies drop weapons/modifiers/health on death based on `EnemyData` drop table. | 2.1 |
-| 4.8 | **Health Pickup** | Consumable that heals player. Drops from enemies or found in item rooms. | 4.7, 3.8 |
 
 ### Phase 5: Boss & Progression (🟡 Important)
 
@@ -998,7 +994,6 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | 5.1 | **Boss Room** | Special room type. Triggers boss encounter on enter. | 3.2 |
 | 5.2 | **Boss Enemy** | Multi-phase enemy. Unique attack patterns per phase. High HP. | 4.1 |
 | 5.3 | **Boss Phases** | Phase transitions: HP thresholds trigger new attack patterns, telegraph, UI. | 5.2 |
-| 5.4 | **Boss Drops** | Boss drops unique weapon/modifier on death. | 5.2, 4.6 |
 | 5.5 | **Map Complete** | Boss death → victory screen → back to main menu. | 5.2, 2.6 |
 
 ### Phase 6: Polish & Juice (🟢 Nice to Have)

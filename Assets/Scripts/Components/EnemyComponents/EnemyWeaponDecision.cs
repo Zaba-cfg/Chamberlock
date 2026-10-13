@@ -2,7 +2,7 @@ using Components.Base.Weapon;
 using Components.Weapons;
 using UnityEngine;
 
-namespace Components.Enemy
+namespace Components.EnemyComponents
 {
     [RequireComponent(typeof(WeaponDetection))]
     [RequireComponent(typeof(WeaponHolder))]

@@ -31,7 +31,7 @@ namespace Components.Base.HealthRelated
 
         private void HandleDied()
         {
-            if (_holder != null)
+            if (_holder != null && _holder.HasWeapon)
             {
                 _holder.DropCurrentWeapon();
             }

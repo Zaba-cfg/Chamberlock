@@ -1,7 +1,7 @@
 using Components.Weapons;
 using UnityEngine;
 
-namespace Components.Enemy
+namespace Components.EnemyComponents
 {
     [RequireComponent(typeof(WeaponHolder))]
 
@@ -9,7 +9,17 @@ namespace Components.Enemy
     {
         [SerializeField] private Transform _target;
         [SerializeField] private float _attackRange = 5f;
-    
+
+        public Transform Target => _target;
+
+        public void SetTarget(Transform target)
+        {
+            if (target == null)
+                throw new System.ArgumentNullException(nameof(target));
+
+            _target = target;
+        }
+
         private WeaponHolder _weaponHolder;
 
         private void Awake()

@@ -2,7 +2,7 @@ using Components.Base.HealthRelated;
 using Systems.Game;
 using UnityEngine;
 
-namespace Components.Enemy
+namespace Components.EnemyComponents
 {
     [RequireComponent(typeof(Health))]
     public class EnemyKillCounter : MonoBehaviour

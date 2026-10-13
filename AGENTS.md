@@ -2,7 +2,7 @@
 
 ## What This Is
 
-Unity 6.3 LTS 2D Roguelite. C#. URP 2D render pipeline. No CLI build system -- everything runs in the Unity Editor.
+Unity 6.3 LTS 2D Roguelike. C#. URP 2D render pipeline. No CLI build system -- everything runs in the Unity Editor.
 
 ## Conventions
 

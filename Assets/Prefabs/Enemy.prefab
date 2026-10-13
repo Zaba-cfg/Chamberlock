@@ -60,6 +60,7 @@ GameObject:
   - component: {fileID: 5076682262055427800}
   - component: {fileID: 6368664443356909174}
   - component: {fileID: -6472569565185535112}
+  - component: {fileID: 1620615534615324033}
   m_Layer: 0
   m_Name: Enemy
   m_TagString: Untagged
@@ -530,3 +531,15 @@ CircleCollider2D:
   m_CompositeOrder: 0
   m_Offset: {x: 0, y: 0}
   m_Radius: 0.6
+--- !u!114 &1620615534615324033
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2976969469855400215}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0be1442cdde68494fb649497d58eadda, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Components.EnemyComponents.EnemyTargetAssigner

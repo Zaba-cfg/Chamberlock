@@ -5,7 +5,7 @@ using Components.Weapons;
 using Systems.Game;
 using UnityEngine;
 
-namespace Entities.Player
+namespace Entities.PlayerRelated
 {
     [RequireComponent(typeof(Health))]
     [RequireComponent(typeof(PlayerInput))]

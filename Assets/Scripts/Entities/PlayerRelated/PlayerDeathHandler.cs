@@ -2,7 +2,7 @@ using Components.Base.HealthRelated;
 using Systems.Game;
 using UnityEngine;
 
-namespace Components.Player
+namespace Entities.PlayerRelated
 {
     [RequireComponent(typeof(Health))]
     public class PlayerDeathHandler : MonoBehaviour
