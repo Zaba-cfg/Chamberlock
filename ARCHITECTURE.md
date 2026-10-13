@@ -26,7 +26,7 @@
 | &emsp; 4.11 [UI System](#411-ui-system) | HUD + menus |
 | &emsp; 4.12 [Debug System](#412-debug-system) | Loggers and testers |
 | &emsp; 4.13 [Object Pool](#413-object-pool-system) | Generic pooling |
-| &emsp; 4.14 [Room System](#414-room-system-planned) | Rooms, doors, map structure (planned) |
+| &emsp; 4.14 [Room System](#414-room-system) | Rooms, doors, map structure, transitions |
 | &emsp; 4.15 [Enemy Types](#415-enemy-types-planned) | Per-type behaviors (planned) |
 | &emsp; 4.16 [Game Flow](#416-game-flow--scene-flow) | Game state, run tracking, scene loading |
 | &emsp; 4.17 [Audio](#417-audio-system) | Music + SFX layers, mixer-driven volume |
@@ -246,12 +246,13 @@ Scripts/
 │   ├── PlayerInput/     # Unity Input System bridge
 │   │   ├── PlayerInput.cs, AimDevice.cs
 │   ├── Projectile/      # Projectile.cs, ProjectileFireStrategy.cs
-│   └── Rooms/           # (planned) Room system
-│       ├── RoomController.cs
-│       ├── RoomDoor.cs
-│       ├── RoomData.cs (ScriptableObject)
-│       ├── RoomGenerator.cs
-│       └── RoomType.cs (enum)
+│   └── Rooms/           # Room system (3A core done, 3B map pending)
+│       ├── RoomType.cs (enum), DoorDirection.cs (enum)
+│       ├── RoomController.cs, RoomDoor.cs, RoomEnemy.cs, RoomDebugger.cs
+│       ├── EnemyWave.cs
+│       └── RoomData.cs (ScriptableObject)
+├── Map/                  # (3B) MapData.cs, MapRoomEntry.cs, RoomDoorLink.cs,
+│                         # DungeonManager.cs, RoomCamera.cs
 ├── Systems/             # Global managers and services
 │   ├── Pool/              # ObjectPool.cs, PoolManager.cs, IPoolable.cs
 │   ├── Game/              # GameState.cs, GameManager.cs, RunManager.cs, RunStats.cs,
@@ -264,6 +265,7 @@ Scripts/
 │   ├── Menus/           # MainMenuController.cs, PauseMenuController.cs,
 │   │                    # SettingsPanelController.cs, GameOverScreen.cs
 │   └── WeaponAmmoUI/    # WeaponAmmoUI.cs (legacy minimal ammo text)
+│   └── RoomTransition/  # RoomTransitionOverlay.cs (fade, 3B)
 └── Debug/               # Debug loggers and testers
     ├── HealthDebugger.cs, HealthTester.cs
     ├── WeaponDebugger.cs, ModifierDebugger.cs
@@ -596,11 +598,11 @@ GameplayCanvas
 
 ---
 
-### 4.14 Room System (Planned)
+### 4.14 Room System
 
 > Reference: *The Binding of Isaac* — rooms are the core spatial unit.
 
-**Files**: `RoomController.cs`, `RoomDoor.cs`, `RoomData.cs`, `RoomGenerator.cs`, `RoomType.cs`
+**Files**: `Components/Rooms/` — `RoomController.cs`, `RoomDoor.cs`, `RoomData.cs`, `RoomEnemy.cs`, `EnemyWave.cs`, `RoomType.cs`, `DoorDirection.cs`, `RoomDebugger.cs`. Map: `Components/Map/` — `MapData.cs`, `MapRoomEntry.cs`, `RoomDoorLink.cs`, `DungeonManager.cs`, `RoomCamera.cs`; `UI/RoomTransition/RoomTransitionOverlay.cs`.
 
 #### Room Types
 | Type | Behavior |
@@ -611,25 +613,24 @@ GameplayCanvas
 | **Start** | Entry point. No enemies, no pickups. |
 
 #### Room Controller
-- `RoomData` (ScriptableObject): room type, enemy wave definitions
-- `RoomController` (MonoBehaviour): tracks enemies alive, fires `RoomCleared` event
-- Doors are `Collider2D` triggers — disabled when room is locked
-- On player enter → lock doors, spawn enemies. On all enemies dead → unlock doors.
+- `RoomData` (ScriptableObject): room type, tile dimensions, enemy wave definitions (`EnemyWave` / `EnemyWaveEntry`).
+- `RoomController` (MonoBehaviour): state machine `Idle → Active → Cleared`. Activates when the player enters the room's trigger collider (or explicitly via the DungeonManager). Only `Combat`/`Boss` rooms lock; `Start`/`Item` never lock and never count.
+- `RoomDoor`: a `Collider2D` **trigger** detects the player; a child `Blocker` collider is enabled only while locked. Unlocked/cleared rooms stay unlocked.
+- `RoomEnemy`: registrar on each enemy — finds its parent `RoomController`, registers on enable, forwards `Health.Died`. Keeps death accounting off `DestroyOnDeath`'s ordering.
+- Clearing the last tracked enemy → unlock doors, fire `RoomCleared`, call `RunManager.AddRoomCleared()`.
 
-#### Map Structure
-```
-Start Room → Combat Room → Item Room → Combat Room → ... → Boss Room
-```
-- Map is a linear or branching sequence of rooms
-- Rooms connected via door triggers
-- Room layout is predefined (tilemap-based) — procedural generation is out of scope for v1
+#### Map & Transitions
+- `MapData` (ScriptableObject): ordered `MapRoomEntry` list — each entry = `RoomData` + room prefab + `worldPosition` + explicit `RoomDoorLink`s (`from` direction → `toRoomIndex` → `to` direction).
+- **Discrete rooms**: one active room prefab is instantiated at a time. `DungeonManager` spawns the entry room, subscribes to its doors, and on a linked door crossing: fade out → destroy the old room → instantiate the next → teleport the player just inside the arrival door → `Activate()` → snap camera → fade in.
+- `RoomCamera` locks the view to the active room root (no player-follow); `RoomTransitionOverlay` (CanvasGroup) provides the black fade and blocks input during a swap.
+- Notes: `RoomDoorLink`s are directional (forward-only in the linear test map). Unlinked doors do nothing. A room needs a door matching each link's `to` direction.
 
 #### Room Generator (Future)
 - If procedural generation is added later: `RoomGenerator` picks from a pool of room templates
 - Templates are pre-built tilemap rooms with spawn points
 - Generator connects them in a valid graph
 
-**Status**: 🔲 Not started
+**Status**: 🚧 In progress — 3.1–3.5 complete (room core + map/transitions verified); 3.7–3.9 (spawner/content rooms) and 3.6 (tilemap) not started.
 
 ---
 
@@ -793,7 +794,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 |-------|----------|--------|----------|
 | **Bootstrap** | ✅ Yes (index 0) | Entry | `Persistent` object: `GameManager`, `RunManager`, `SceneLoader`, `PauseInput`, `AudioManager`, `Bootstrap` |
 | **MainMenu** | ✅ Yes (index 1) | ✅ Done | Main Menu UI (Title, New Game, Settings, Quit) + shared Settings panel (prefab instance) |
-| **Gameplay** | ✅ Yes (index 2) | 🚧 WIP | Player, one Enemy, `PoolManager`, weapon pickups, Pause/Settings UI, HUD (health / timer / weapon) and Game Over overlay. No room system yet. |
+| **Gameplay** | ✅ Yes (index 2) | 🚧 WIP | Player, one Enemy, `PoolManager`, weapon pickups, Pause/Settings UI, HUD (health / timer / weapon) and Game Over overlay. Room core + test rooms done (3A); map-driven room spawning pending (3B). |
 | **SampleScene** | ✅ Yes (index 3) | Legacy sandbox | Original test scene (played directly, no `GameManager`) — not part of the game flow |
 
 > **Always press Play from `Bootstrap`** (build index 0). The persistent managers are created there; the other scenes rely on them surviving the scene load (see §4.16).
@@ -890,6 +891,8 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | Audio Manager | ✅ Done | `Systems/Audio` — music + SFX layers; mixer volume driven by `GameSettings` |
 | HUD | ✅ Done | `Scripts/UI/HUD` — health bar, run timer, weapon HUD |
 | Death Handling | ✅ Done | Enemy destroyed + kill counted; player death → run end + `GameOver` |
+| Room Core | ✅ Done | `Components/Rooms` — RoomData/RoomController/RoomDoor/RoomEnemy/EnemyWave; lock/clear verified (`8a0de8d`) |
+| Map & Transitions | ✅ Done | `Components/Map` — MapData/DungeonManager/RoomCamera + fade overlay; map-driven room swapping verified |
 
 ---
 
@@ -899,9 +902,9 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 
 | Gap | Category | Priority | Roadmap |
 |-----|----------|----------|---------|
-| **Room system** — rooms, doors, lock/clear | Core | 🔴 High | 3.1–3.3, 3.7–3.9 |
-| **Map structure** — room sequence + transitions | Core | 🔴 High | 3.4–3.5 |
-| **Enemy spawner** — wave/room-based spawning | Core | 🔴 High | 4.6 |
+| **Room system** — rooms, doors, lock/clear | Core | 🔴 High | 3.1–3.3 ✅, 3.7–3.9 pending |
+| **Map structure** — room sequence + transitions | Core | 🔴 High | 3.4–3.5 ✅ |
+| **Enemy spawner** — wave/room-based spawning | Core | 🔴 High | 4.6 (uses 3.7 waves) |
 | **Enemy types** — Chaser, Shooter, Rusher, Robber, Tank | Core | 🔴 High | 4.2–4.5, 7.3 |
 | **Boss** — room, multi-phase enemy | Core | 🔴 High | 5.1–5.5 |
 | **Room tilemap** — walls, floor, door sockets | Visual | 🔴 High | 3.6, 6.3 |
@@ -962,11 +965,11 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 
 | # | Task | Description | Depends On |
 |---|------|-------------|------------|
-| 3.1 | **RoomData (SO)** | Room type, dimensions, door positions, enemy wave definitions. | — |
-| 3.2 | **RoomController** | Tracks enemies alive. `RoomCleared` event. Lock/unlock doors. | 1.2 |
-| 3.3 | **RoomDoor** | Collider2D trigger. Locks on room enter, unlocks on room clear. | 3.2 |
-| 3.4 | **Map Structure** | Linear room sequence: Start → Combat → Item → Combat → ... → Boss. | 3.1, 3.2 |
-| 3.5 | **Room Transitions** | Player enters door → fade/transition → load next room. | 3.4, 1.4 |
+| 3.1 | **RoomData (SO)** ✅ | Room type, dimensions, door positions, enemy wave definitions. | — |
+| 3.2 | **RoomController** ✅ | Tracks enemies alive. `RoomCleared` event. Lock/unlock doors. | 1.2 |
+| 3.3 | **RoomDoor** ✅ | Collider2D trigger. Locks on room enter, unlocks on room clear. | 3.2 |
+| 3.4 | **Map Structure** ✅ | Linear room sequence: Start → Combat → Item → Combat → ... → Boss. `MapData`/`MapRoomEntry`/`RoomDoorLink` + editor `Map_Test`. | 3.1, 3.2 |
+| 3.5 | **Room Transitions** ✅ | Player enters door → fade → swap room → teleport → camera frame. `DungeonManager`/`RoomCamera`/`RoomTransitionOverlay`. | 3.4, 1.4 |
 | 3.6 | **Room Tilemap** | Base room template: walls, floor, door sockets. 16×16 tileset. | 3.1 |
 | 3.7 | **Combat Room** | Spawns enemy waves on enter. Clears when all enemies dead. | 3.2, 2.1 |
 | 3.8 | **Item Room** | Contains weapon or modifier pickup. No enemies. | 3.2 |
@@ -1039,6 +1042,8 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | **Weapons** | Pistol, Colt, Mosin, Katana |
 | **Fire Strategies** | Melee, Projectile |
 | **Modifiers** | DoubleDamage, DoubleFireRate, DoubleReload, DoubleSpeed, DoubleShot |
+| **Rooms** | `Data/Rooms/CombatRoom_01`, `Data/Rooms/StartRoom` (BossRoom + ItemRoom in 3C) |
+| **Maps** | `Data/Maps/Map_Test` (3B, editor-created) |
 
 ### Audio
 
@@ -1073,8 +1078,9 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | Projectile | Bullet entity (pooled) |
 | Colt / Pistol / Mosin / Katana | Weapon pickups (each with its own `WeaponData`) |
 | PoolManagerProjectile | `PoolManager` pre-configured for projectile pooling |
+| Room_Combat / Room_Start | Room prefabs (`RoomController` + doors + walls; Combat has enemies + `EnemyTargetAssigner`) |
 | SettingPanel | Shared settings UI (instanced on the Main Menu and in Gameplay) |
-| GameplayCanvas | Game canvas (`HUD`, `PauseMenu`, `GameOverScreen`) |
+| GameplayCanvas | Game canvas (`HUD`, `PauseMenu`, `GameOverScreen`) + `RoomTransitionOverlay` (3B) |
 
 ---
 

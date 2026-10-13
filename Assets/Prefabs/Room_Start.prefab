@@ -673,7 +673,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: deca08d7617b14444b894c13df21f427, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Components.Rooms.RoomDoor
-  _direction: 3
+  _direction: 1
   _blocker: {fileID: 5866411290978640289}
 --- !u!61 &2882350118533596502
 BoxCollider2D:
