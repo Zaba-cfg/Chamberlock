@@ -26,7 +26,7 @@
 | &emsp; 4.11 [UI System](#411-ui-system) | HUD + menus |
 | &emsp; 4.12 [Debug System](#412-debug-system) | Loggers and testers |
 | &emsp; 4.13 [Object Pool](#413-object-pool-system) | Generic pooling |
-| &emsp; 4.14 [Room System](#414-room-system) | Rooms, doors, map structure, transitions |
+| &emsp; 4.14 [Room System](#414-room-system) | Rooms, doors, map structure, transitions ([diagrams](docs/ROOMS.md)) |
 | &emsp; 4.15 [Enemy Types](#415-enemy-types-planned) | Per-type behaviors (planned) |
 | &emsp; 4.16 [Game Flow](#416-game-flow--scene-flow) | Game state, run tracking, scene loading |
 | &emsp; 4.17 [Audio](#417-audio-system) | Music + SFX layers, mixer-driven volume |
@@ -602,6 +602,8 @@ GameplayCanvas
 ### 4.14 Room System
 
 > Reference: *The Binding of Isaac* — rooms are the core spatial unit.
+>
+> Class & communication diagrams: **[`docs/ROOMS.md`](docs/ROOMS.md)** — every room class, its relations, the prefab composition, and a full sender/receiver matrix.
 
 **Files**: `Components/Rooms/` — `RoomController.cs`, `RoomDoor.cs`, `RoomData.cs`, `RoomEnemy.cs`, `RoomEnemySpawner.cs`, `RoomItemSpawner.cs`, `RoomSpawnPoint.cs`, `EnemySpawnEntry.cs`, `RoomType.cs`, `DoorDirection.cs`, `SpawnPointKind.cs`, `RoomDebugger.cs`. Map: `Components/Map/` — `MapData.cs`, `MapRoomEntry.cs`, `RoomDoorLink.cs`, `DungeonManager.cs`, `RoomCamera.cs`; `UI/RoomTransition/RoomTransitionOverlay.cs`.
 
