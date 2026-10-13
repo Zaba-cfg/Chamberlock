@@ -17,7 +17,7 @@
 | &emsp; 4.2 [Movement](#42-movement-system) | Interface-driven, modifier-aware |
 | &emsp; 4.3 [Look Direction](#43-look-direction-system) | 2D rotation |
 | &emsp; 4.4 [Weapon System](#44-weapon-system) | Core weapon logic, strategies, data |
-| &emsp; 4.5 [Projectile System](#45-projectile-system) | Bullet movement, damage, auto-destroy |
+| &emsp; 4.5 [Projectile System](#45-projectile-system) | Bullet movement, damage, pooled lifetime |
 | &emsp; 4.6 [Modifier System](#46-modifier-system) | Add-then-Multiply pipeline |
 | &emsp; 4.7 [Interaction System](#47-interaction-system) | Trigger-based closest selection |
 | &emsp; 4.8 [Weapon Pickup & Detection](#48-weapon-pickup--detection) | Pickup and area scanning |
@@ -35,8 +35,8 @@
 | [7. Prefabs](#7-prefabs) | Prefab inventory |
 | [8. Packages](#8-packages) | Package dependencies |
 | [9. Key Design Decisions](#9-key-design-decisions) | Architectural rationale |
-| [10. What Has Been Done](#10-what-has-been-done--status-matrix) | Status matrix |
-| [11. What's Missing](#11-whats-missing--identified-gaps) | Identified gaps |
+| [10. What Has Been Done](#10-what-has-been-done--status-matrix) | Implemented systems |
+| [11. What's Missing](#11-whats-missing--identified-gaps) | Open gaps by priority |
 | [12. Roadmap](#12-roadmap--work-plan) | 7-phase work plan |
 | [13. Asset Inventory](#13-asset-inventory) | SO assets, audio, sprites, prefabs |
 | [14. Technical Notes](#14-technical-notes) | Pipeline diagrams, pseudocode |
@@ -78,27 +78,31 @@
 
 | Entity | Body (visible) | Canvas | Footprint |
 |--------|----------------|--------|-----------|
-| **Player** | 16×24 px | 32×32 px | 1.0 × 1.5 tiles |
+| **Player** | 18×26 px | 32×32 px | 1.0 × 1.5 tiles |
 | **Small enemy** (Chaser) | 16×24 px | 32×32 px | 1.0 × 1.5 tiles |
 | **Medium enemy** (Shooter, Rusher) | 16×24 px | 32×32 px | 1.0 × 1.5 tiles |
 | **Large enemy** (Tank) | 24×32 px | 48×48 px | 1.5 × 2.0 tiles |
 | **Boss** | 48×48 px | 64×64 px | 3.0 × 3.0 tiles |
 
+> Enemy rows are target sizes for the planned roster; the current **Player** and generic **Enemy** sprites are both 18×26 px (see §13).
+
 #### Sprite Canvas Specs — Weapons, Pickups & Projectiles
 
-| Asset | Canvas | Body (visible) | Pivot |
-|-------|--------|----------------|-------|
-| Held gun — pistol / short | 16×16 px | ~8×12 px | Bottom-Center (grip) |
-| Held gun — rifle (Mosin) | 16×24 px | ~7×18 px | Bottom-Center (grip) |
-| Held melee (Katana) | 16×24 px | ~5×18 px | Bottom-Center (grip) |
-| Weapon UI icon (`WeaponData._icon`) | 16×16 px | ~14×14 px | Center |
-| Modifier / powerup pickup | 16×16 px | ~12×12 px | Center |
-| Projectile / bullet | 8×8 px | ~4×6 px | Center |
-| Muzzle flash (`MuzzleFlash.png`) | 14×16 px | — | Center |
+> Values are the current assets' actual sprite rects and canvases (see §13).
 
-> **Weapons are drawn pointing up (+Y) with a Bottom-Center (grip) pivot.** `WeaponSocket` is rotated −90° and the barrel (`Muzzle`) sits on local +Y, so the sprite rotates into the aim direction.
+| Asset | Canvas | Sprite (visible) | Pivot |
+|-------|--------|------------------|-------|
+| Held gun — pistol (`Pistol.png`) | 16×16 px | 14×10 px | Center |
+| Held gun — rifle (`Colt.png`, `Mosin.png`) | 24×16 px | 20×10 px | Center |
+| Held melee (`Katana.png`) | 24×16 px | 20×8 px | Center |
+| Weapon UI icon (`WeaponData._icon`) | 16×16 px | — | Center |
+| Modifier / powerup pickup | 16×16 px | 16×16 px | Center |
+| Projectile / bullet | 8×8 px | — | Center |
+| Muzzle flash (`MuzzleFlash.png`) | 16×16 px | 14×16 px | Center |
+
+> **Held weapon sprites are drawn landscape** (wider than tall) with a **Center** pivot; `WeaponSocket` rotates the sprite into the aim direction.
 >
-> **Draw at final size — never use `localScale` to resize pixel art.** The current `ProjectileWeapon` (0.46) and `Projectile` (0.3) transform scales distort pixels; reset them to `1` once real sprites exist.
+> **Draw at final size — never use `localScale` to resize pixel art.** The `Projectile` prefab still uses a `0.3` transform scale (placeholder); reset it to `1` once the bullet sprite is drawn at final size.
 >
 > **Sorting**: held weapon `Order in Layer +1` (in front of the player); floor pickups `−1` (behind the player).
 
@@ -114,7 +118,7 @@
 | Generate Mip Maps | Off |
 | Wrap Mode | Clamp |
 | Mesh Type | Full Rect |
-| Pivot | Center (default) · Bottom-Center for held weapons — see table above |
+| Pivot | Center (default) — see table above |
 
 > **Colliders are independent of the art.** Use a `CircleCollider2D` at the feet (~0.35 radius) — never a box that matches the full sprite.
 
@@ -220,11 +224,11 @@ Scripts/
 │   │   └── Movement.cs
 │   ├── Weapons/         # Weapon system (Strategy pattern)
 │   │   ├── Weapon.cs, WeaponHolder.cs, WeaponData.cs
-│   │   ├── WeaponFireStrategy.cs (abstract), MeleeFireStrategy.cs, ProjectileFireStrategy.cs
+│   │   ├── WeaponFireStrategy.cs (abstract), MeleeFireStrategy.cs
+│   │   ├── WeaponFireModifierDefinition.cs
 │   │   ├── WeaponFireContext.cs, WeaponFireResult.cs
 │   │   ├── WeaponAmmoType.cs
 │   │   └── WeaponAudioFeedback.cs, WeaponVisualFeedback.cs
-│   ├── Projectile/      # Projectile.cs, ProjectileFireStrategy.cs
 │   ├── Modifiers/       # Stat modifier pipeline
 │   │   ├── ModifierDefinition.cs (abstract), StatModifierDefinition.cs
 │   │   ├── DoubleShotModifierDefinition.cs
@@ -241,7 +245,7 @@ Scripts/
 │   │   └── PlayerDeathHandler.cs
 │   ├── PlayerInput/     # Unity Input System bridge
 │   │   ├── PlayerInput.cs, AimDevice.cs
-│   ├── Projectile/      # Projectile + ProjectileFireStrategy
+│   ├── Projectile/      # Projectile.cs, ProjectileFireStrategy.cs
 │   └── Rooms/           # (planned) Room system
 │       ├── RoomController.cs
 │       ├── RoomDoor.cs
@@ -326,7 +330,7 @@ Scripts/
 
 ### 4.4 Weapon System
 
-**Core Files**: `Weapon.cs`, `WeaponHolder.cs`, `WeaponData.cs`, `WeaponFireStrategy.cs`, `WeaponFireContext.cs`, `WeaponFireResult.cs`, `WeaponAmmoType.cs`
+**Core Files**: `Weapon.cs`, `WeaponHolder.cs`, `WeaponData.cs`, `WeaponFireStrategy.cs`, `WeaponFireModifierDefinition.cs`, `WeaponFireContext.cs`, `WeaponFireResult.cs`, `WeaponAmmoType.cs`
 
 #### Data Layer (`WeaponData` ScriptableObject)
 | Property | Type | Description |
@@ -356,7 +360,7 @@ Scripts/
 | Strategy | Implementation |
 |----------|---------------|
 | `MeleeFireStrategy` | `Physics2D.OverlapCircleAll` with spread angle, deduplication via `HashSet<Health>`, minimum radius multiplier |
-| `ProjectileFireStrategy` | Instantiates `Projectile` prefab per attack count with spread angle |
+| `ProjectileFireStrategy` | Fetches a `Projectile` from `PoolManager` per attack count with spread angle |
 
 **Assets**:
 | Weapon | Damage | FireRate | Mag | Reload | Reserve | Spread | Strategy | Ammo |
@@ -376,8 +380,9 @@ Scripts/
 
 - `Projectile` moves via `Rigidbody2D.linearVelocity` in direction
 - Deals damage on `OnTriggerEnter2D` via `Health.TakeDamage`
-- Auto-destroys after 5 seconds
-- `ProjectileFireStrategy` instantiates from SO reference
+- Implements `IPoolable` — zeroes its velocity on get/return
+- Returns to the pool on hit or after its 5 s lifetime (never `Destroy`ed)
+- `ProjectileFireStrategy` fetches instances from `PoolManager` (§4.13)
 
 **Status**: ✅ Complete
 
@@ -385,7 +390,7 @@ Scripts/
 
 ### 4.6 Modifier System
 
-**Core Files**: `ModifierDefinition.cs`, `StatModifierDefinition.cs`, `DoubleShotModifierDefinition.cs`, `ModifierInstance.cs`, `ModifierInventory.cs`, `ModifierCalculator.cs`, `ModifierStat.cs`, `ModifierOperation.cs`
+**Core Files**: `ModifierDefinition.cs`, `WeaponFireModifierDefinition.cs`, `StatModifierDefinition.cs`, `DoubleShotModifierDefinition.cs`, `ModifierInstance.cs`, `ModifierInventory.cs`, `ModifierCalculator.cs`, `ModifierStat.cs`, `ModifierOperation.cs`
 
 #### Calculation Pipeline
 ```
@@ -420,7 +425,7 @@ result = baseValue
 | `ModifierPickup` | `IInteractable` → adds permanent modifier → destroys self |
 | `TemporaryModifierPickup` | `IInteractable` → adds temporary modifier with duration → destroys self |
 
-> Each modifier shows a **unique 16×16 icon** (see §1 → Sprite Canvas Specs — Weapons, Pickups & Projectiles). Both pickup prefabs currently reuse a single tinted square; replace it with a per-modifier sprite.
+> Each modifier shows its matching **16×16 icon** from `Assets/Sprites/Modifiers` (see §1 → Sprite Canvas Specs — Weapons, Pickups & Projectiles). The pickup objects are authored directly in `SampleScene` (there are no pickup prefabs yet).
 
 **Status**: ✅ Complete
 
@@ -467,7 +472,7 @@ result = baseValue
 | Reload | R | East Button (B) |
 
 - Implements `IMoveInput` for `Movement`
-- Events: `FirePressed`, `FireHeld`, `ReloadPressed`, `InteractPressed`
+- Events: `FirePressed`, `ReloadPressed`, `InteractPressed`; `FireHeld` is a `bool` property (polled by `Weapon`)
 - `AimDevice` enum tracks Mouse vs Gamepad for aim source switching
 
 **Status**: ✅ Complete
@@ -535,6 +540,8 @@ Attacking ────► SeekingWeapon (weapon empty / dropped)
 **Persistence.** `GameSettings` (namespace `Systems.Settings`) is a static, `PlayerPrefs`-backed store; `SettingsPanelController` writes straight to it and `Bootstrap` applies the saved values on startup. `AudioManager` consumes the volume values (§4.17).
 
 **Gameplay canvas layout.**
+
+The whole canvas is the `GameplayCanvas` prefab (§7), instanced in the `Gameplay` scene with per-scene bindings for the player's `Health` and `WeaponHolder`.
 
 ```
 GameplayCanvas
@@ -725,7 +732,7 @@ Bootstrap (index 0)  →  MainMenu  ⇄  Gameplay
 
 #### Known limitations
 - No loading screen or fade yet; `ProgressChanged` exists for Phase 3.5 to consume.
-- `RunStats` is produced but not displayed — the Game Over screen (Phase 2.6) is the intended consumer.
+- `RunStats` is displayed by the Game Over screen (§4.11); it has no other consumer yet.
 
 **Status**: ✅ Complete (state, run tracking, scene flow); menus done (§4.11), audio done (§4.17)
 
@@ -799,8 +806,11 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 |--------|-------------|
 | **Player** | Player entity shell with all components (100 HP, speed 5, `PlayerDeathHandler`) |
 | **Enemy** | Enemy entity shell with AI, combat, weapon detection, `DestroyOnDeath`, `EnemyKillCounter` |
-| **Projectile** | Bullet — speed 15, auto-destroy 5s, trigger collider |
-| **ProjectileWeapon** | Generic weapon prefab with WeaponPickup, visual/audio feedback |
+| **Projectile** | Bullet — speed 15, pooled, 5 s lifetime, trigger collider |
+| **Pistol / Colt / Mosin / Katana** | Weapon pickups (each with its own `WeaponData`, sprite and audio feedback) |
+| **PoolManagerProjectile** | `PoolManager` pre-configured for projectile pooling |
+| **SettingPanel** | Shared settings UI (instanced on the Main Menu and in Gameplay) |
+| **GameplayCanvas** | Game canvas: `HUD`, `PauseMenu` and `GameOverScreen` overlays |
 
 ---
 
@@ -811,6 +821,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 |---------|---------|---------|
 | `com.unity.render-pipelines.universal` | 17.3.0 | URP 2D rendering |
 | `com.unity.inputsystem` | 1.19.0 | New Input System |
+| `com.unity.ugui` | 2.0.0 | uGUI + TextMeshPro |
 | `com.unity.test-framework` | 1.6.0 | Unit testing (imported, unused) |
 | `com.unity.timeline` | 1.8.12 | Timeline (unused) |
 | `com.unity.visualscripting` | 1.9.12 | Visual scripting (unused) |
@@ -844,7 +855,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | **New Input System only** | Legacy input disabled — clean, future-proof |
 | **Room-based spatial loop** | Inspired by *The Binding of Isaac* — rooms are the core unit of progression |
 | **Predefined room layouts** | v1 uses hand-crafted tilemap rooms — procedural generation deferred to Phase 7 |
-| **Object pooling from start** | Avoids GC spikes — projectiles and entities reused, not instantiated/destroyed |
+| **Object pooling from start** | Avoids GC spikes — projectiles are pooled and reused instead of instantiated/destroyed; enemies/pickups can register later |
 | **Audio via mixer groups** | Music and SFX route to `AudioMixer` groups — one place controls each category's volume; `GameSettings` feeds it in decibels |
 | **Enemy types via composition** | Each enemy type is a `MonoBehaviour` composing or extending base FSM — not a monolithic class |
 | **Boss as room event** | Boss is a special room type, not a separate scene — keeps state consistent |
@@ -860,7 +871,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | Look Direction | ✅ Done | 2D rotation |
 | Weapon Core | ✅ Done | Equip, Fire, Reload, Ammo, Cooldown |
 | Weapon Strategies | ✅ Done | Melee + Projectile |
-| Projectile | ✅ Done | Movement, Damage, Auto-destroy |
+| Projectile | ✅ Done | Movement, damage, pooled 5 s lifetime |
 | Modifier System | ✅ Done | Add/Multiply pipeline, temporary, pickups |
 | Interaction | ✅ Done | Trigger-based, closest selection |
 | Weapon Pickup | ✅ Done | IInteractable integration |
@@ -870,10 +881,6 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | Weapon UI | ✅ Done | `WeaponHudUI` — icon, name, ammo, reload (legacy `WeaponAmmoUI` in SampleScene) |
 | Debug Tools | ✅ Done | Loggers + testers for all systems |
 | Object Pool | ✅ Done | `Systems/Pool` — `ObjectPool<T>` + `PoolManager`; projectiles pooled (prewarm 32, grows on demand) |
-| Room System | 🔲 Planned | Room types, doors, lock/clear mechanic |
-| Map Structure | 🔲 Planned | Linear room sequence with transitions |
-| Enemy Types | 🔲 Planned | Chaser, Shooter, Rusher, etc. |
-| Boss System | 🔲 Planned | Multi-phase boss encounter |
 | Game State | ✅ Done | `Systems/Game` — `GameManager` singleton, owns `Time.timeScale` |
 | Run Manager | ✅ Done | Run timer + stats, persistent (survives scene unload) |
 | Scene Flow | ✅ Done | `SceneLoader` async loads; Bootstrap → MainMenu → Gameplay |
@@ -881,84 +888,37 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | Pause Menu | ✅ Done | ESC toggle — Resume, Settings, Quit to Menu |
 | Settings | ✅ Done | Music/SFX volume, resolution, fullscreen (`GameSettings`, PlayerPrefs) |
 | Audio Manager | ✅ Done | `Systems/Audio` — music + SFX layers; mixer volume driven by `GameSettings` |
-| HUD | ✅ Done | `Systems` HUD: health bar, run timer, weapon HUD (`Scripts/UI/HUD`) |
+| HUD | ✅ Done | `Scripts/UI/HUD` — health bar, run timer, weapon HUD |
 | Death Handling | ✅ Done | Enemy destroyed + kill counted; player death → run end + `GameOver` |
 
 ---
 
 ## 11. What's Missing — Identified Gaps
 
-> All gaps below are derived from the target vision: a room-based roguelite in the style of *The Binding of Isaac* and *Enter The Gungeon*.
+> Open (not-yet-built) work only — completed systems are listed in §10. This table is the priority index; §12 sequences the work into tasks with dependencies.
 
-### 10.1 Core Gameplay Gaps
-
-| Gap | Priority | Description |
-|-----|----------|-------------|
-| **Player Death Handling** | ✅ Done | `PlayerDeathHandler` — `Health.Died` → `RunManager.EndRun()` + `GameManager.SetState(GameOver)` |
-| **Enemy Death Handling** | ✅ Done | `DestroyOnDeath` + `EnemyKillCounter`. No loot drop / death animation yet (see Drop System) |
-| **Room System** | 🔴 High | No rooms, no doors, no lock/clear mechanic — the core spatial loop is missing |
-| **Room Types** | 🔴 High | No combat rooms, item rooms, or boss room |
-| **Enemy Spawner** | 🔴 High | Enemies manually placed — no wave/room-based spawning |
-| **Enemy Types** | 🔴 High | Only one generic enemy — no behavioral variety |
-| **Boss Enemy** | 🔴 High | No final boss, no multi-phase fight |
-| **Health Pickup** | 🟡 Medium | `Health.Heal()` exists but nothing triggers it |
-| **Drop System** | 🟡 Medium | Enemies don't drop weapons/modifiers on death |
-
-### 10.2 Map & Flow Gaps
-
-| Gap | Priority | Description |
-|-----|----------|-------------|
-| **Game State Manager** | ✅ Done | `GameManager` — MainMenu / Running / Paused / GameOver |
-| **Scene Flow** | ✅ Done | `SceneLoader` async loads; Bootstrap → MainMenu → Gameplay |
-| **Main Menu** | ✅ Done | `MainMenuController` — New Game, Settings, Quit |
-| **Run Manager** | ✅ Done | `RunManager` — run timer + kill/room stats |
-| **Map Structure** | 🔴 High | No room sequence — no start → combat → item → boss flow |
-| **Door / Lock System** | 🔴 High | No doors that lock on enter and unlock on room clear |
-| **Game Over Screen** | ✅ Done | `GameOverScreen` overlay — run stats, Restart, Main Menu |
-| **Pause Menu** | ✅ Done | `PauseMenuController` — ESC toggle (Resume / Settings / Quit to Menu) |
-| **Settings Menu** | ✅ Done | `SettingsPanelController` — volume, resolution, fullscreen |
-
-### 10.3 UI Gaps
-
-| Gap | Priority | Description |
-|-----|----------|-------------|
-| **Health Bar** | ✅ Done | `PlayerHealthBarUI` — slider bound to `Health` |
-| **Run Timer** | ✅ Done | `RunTimerUI` — `mm:ss` from `RunManager` |
-| **Ammo Display** | ✅ Done | `WeaponHudUI` — icon, name, ammo/reserve, reload indicator |
-| **Modifier HUD** | 🟡 Medium | No active modifier display |
-| **Minimap** | 🟢 Low | No room/level overview |
-
-### 10.4 Audio Gaps
-
-| Gap | Priority | Description |
-|-----|----------|-------------|
-| **Audio Manager** | ✅ Done | `Systems/Audio` — music + SFX layers, mixer volume from `GameSettings` |
-| **Music System** | ✅ Done | `PlayMusic`/`StopMusic` ready; no clips imported yet (add to `Assets/Audio/Music`) |
-| **Room SFX** | 🟡 Medium | No door lock/unlock sounds, no room clear jingle |
-| **Enemy SFX** | 🟡 Medium | No enemy-specific attack/death sounds |
-| **Boss SFX** | 🟡 Medium | No boss entrance, phase transition, death sounds |
-
-### 10.5 Visual Gaps
-
-| Gap | Priority | Description |
-|-----|----------|-------------|
-| **Player Sprite** | ✅ Done | 18×26 px body, 16 PPU, Point filter (`Player 1.png`) — see §13 |
-| **Enemy Sprites** | 🔴 High | Red placeholder square — one sprite for all types |
-| **Room Tilemap** | 🔴 High | No environment tiles — empty scenes |
-| **Door Sprites** | 🟡 Medium | No visual door objects |
-| **Animations** | 🟡 Medium | No sprite animations (2D Animation package imported, unused) |
-| **Particle Effects** | 🟡 Medium | Muzzle flash is sprite swap only — no blood, sparks, etc. |
-| **Screen Shake** | 🟡 Medium | No camera juice |
-| **Damage Numbers** | 🟢 Low | No floating combat text |
-
-### 10.6 Technical Gaps
-
-| Gap | Priority | Description |
-|-----|----------|-------------|
-| **Scene Management** | 🔴 High | No `SceneManager` usage — no scene loading flow |
-| **Unit Tests** | 🟡 Medium | `test-framework` imported — zero test files |
-| **Save System** | 🟢 Low | No persistence |
-| **Localization** | 🟢 Low | No i18n |
+| Gap | Category | Priority | Roadmap |
+|-----|----------|----------|---------|
+| **Room system** — rooms, doors, lock/clear | Core | 🔴 High | 3.1–3.3, 3.7–3.9 |
+| **Map structure** — room sequence + transitions | Core | 🔴 High | 3.4–3.5 |
+| **Enemy spawner** — wave/room-based spawning | Core | 🔴 High | 4.6 |
+| **Enemy types** — Chaser, Shooter, Rusher, Robber, Tank | Core | 🔴 High | 4.2–4.5, 7.3 |
+| **Boss** — room, multi-phase enemy, drops | Core | 🔴 High | 5.1–5.5 |
+| **Room tilemap** — walls, floor, door sockets | Visual | 🔴 High | 3.6, 6.3 |
+| **Drop system** — loot on enemy death | Core | 🟡 Medium | 4.7 |
+| **Health pickup** | Core | 🟡 Medium | 4.8 |
+| **Modifier HUD** — active modifiers + duration | UI | 🟡 Medium | 6.9 |
+| **Door sprites** | Visual | 🟡 Medium | — |
+| **Animations** — idle / walk / attack / death | Visual | 🟡 Medium | 6.2 |
+| **Particle effects** — blood, sparks, bursts | Visual | 🟡 Medium | 6.7 |
+| **Screen shake** | Visual | 🟡 Medium | 2.8 |
+| **Room / enemy / boss SFX** | Audio | 🟡 Medium | 6.5–6.6 |
+| **Unit tests** | Technical | 🟡 Medium | — |
+| **Music content** — menu, combat, boss | Audio | 🟢 Low | 6.4 |
+| **Damage numbers** | Visual | 🟢 Low | 6.8 |
+| **Minimap** | UI | 🟢 Low | 6.10 |
+| **Save / meta-progression** | Technical | 🟢 Low | 7.6 |
+| **Localization** | Technical | 🟢 Low | — |
 
 ---
 
@@ -966,6 +926,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 
 > Ordered by dependency. Each phase builds on the previous.
 > Reference: *The Binding of Isaac* (room flow, item rooms, boss fights) / *Enter The Gungeon* (projectile density, dodge mechanics, weapon variety).
+> Open work is summarized by priority in §11; the tables below sequence it into tasks and dependencies.
 
 ### Phase 1: Foundation (🔴 Critical)
 
@@ -1088,21 +1049,25 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 
 | Category | Count | Examples |
 |----------|-------|---------|
-| **Mixer** | 1 | `MainMixer.mixer` — Master → Music + SFX (exposed `MusicVolume` / `SfxVolume`) |
+| **Mixer** | 1 | `Assets/Audio/Mixers/MainMixer.mixer` — Master → Music + SFX (exposed `MusicVolume` / `SfxVolume`) |
 | **Music** | 0 | (none yet — `Assets/Audio/Music` ready for tracks) |
-| **Combat & Gore** | 15 | bone_snap, crunch, punch, slap, squelching |
-| **Weapons** | 16 | sword_clash, shot_muffled, weapon_equip, weapon_upgrade |
+| **Combat & Gore** | 17 | bone_snap, crunch, punch, slap, squelching, swipe |
+| **Weapons** | 15 | sword_clash, shot_muffled, weapon_equip, weapon_upgrade |
 
 ### Sprites
 
 | Asset | Notes |
 |-------|-------|
-| `MuzzleFlash.png` | Weapon VFX |
-| `Player 1.png` | Player entity — 18×26 px body @ 16 PPU |
+| `Assets/Sprites/Entity/Player.png` | Player entity — sprite `Player 1` 18×26 px (32×32 canvas) @ 16 PPU |
+| `Assets/Sprites/Entity/Enemy.png` | Generic enemy — sprite `Enemy` 18×26 px (32×32 canvas) @ 16 PPU |
+| `Assets/Sprites/Weapons/Pistol.png` | Pistol pickup + UI icon — sprite 14×10 px (16×16 canvas) |
+| `Assets/Sprites/Weapons/Colt.png` | Colt pickup + UI icon — sprite 20×10 px (24×16 canvas) |
+| `Assets/Sprites/Weapons/Mosin.png` | Mosin pickup + UI icon — sprite 20×10 px (24×16 canvas) |
+| `Assets/Sprites/Weapons/Katana.png` | Katana pickup + UI icon — sprite 20×8 px (24×16 canvas) |
+| `Assets/Sprites/Modifiers/*.png` | One 16×16 icon per modifier (DoubleDamage, DoubleFireRate, DoubleReload, DoubleShot, DoubleSpeed) |
+| `Assets/Sprites/Effects/MuzzleFlash.png` | Weapon VFX — sprite 14×16 px (16×16 canvas) |
 
-> **Planned entity sprites** — canvas sizes defined in [§1 → Sprite Canvas Specs](#visual-specs): Chaser 32×32, Shooter/Rusher 32×32, Tank 48×48, Boss 64×64. All imported at 16 PPU, Point filter, no compression. (Enemy still uses the placeholder square — see gap 10.5.)
->
-> **Planned item sprites** — weapon world sprites + UI icons, a unique 16×16 icon per modifier, and an 8×8 bullet (specs in [§1 → Sprite Canvas Specs — Weapons, Pickups & Projectiles](#visual-specs)).
+> **Planned sprites** — per-enemy-type art (Chaser 32×32, Shooter/Rusher 32×32, Tank 48×48, Boss 64×64) and a dedicated bullet sprite (the projectile currently uses a built-in placeholder). Canvas sizes in [§1 → Sprite Canvas Specs](#visual-specs); all at 16 PPU, Point filter, no compression.
 
 ### Prefabs
 
@@ -1110,11 +1075,11 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 |--------|---------|
 | Player | Player entity (Health, PlayerInput, WeaponHolder, LookDirection, Interaction, `PlayerDeathHandler`) |
 | Enemy | Enemy entity (AI, WeaponHolder, Health, `DestroyOnDeath`, `EnemyKillCounter`) |
-| Projectile | Bullet entity |
-| ProjectileWeapon | Weapon pickup (generic) |
+| Projectile | Bullet entity (pooled) |
 | Colt / Pistol / Mosin / Katana | Weapon pickups (each with its own `WeaponData`) |
 | PoolManagerProjectile | `PoolManager` pre-configured for projectile pooling |
 | SettingPanel | Shared settings UI (instanced on the Main Menu and in Gameplay) |
+| GameplayCanvas | Game canvas (`HUD`, `PauseMenu`, `GameOverScreen`) |
 
 ---
 
