@@ -1,6 +1,7 @@
 using System;
 using Components.Base;
 using Components.Modifiers;
+using Components.Weapons.Enums;
 using UnityEngine;
 
 namespace Components.Weapons

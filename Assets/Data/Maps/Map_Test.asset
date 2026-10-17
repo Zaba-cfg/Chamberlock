@@ -14,38 +14,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Components.Map.MapData
   _rooms:
   - _data: {fileID: 11400000, guid: 46a9c1ac2a1e5ca4788f37213137c783, type: 2}
-    _roomPrefab: {fileID: 3994319750776063750, guid: 6c66f360d2d4c97419c68ed040edcc6c, type: 3}
-    _worldPosition: {x: -12, y: 0}
-    _links:
-    - _from: 1
-      _toRoomIndex: 1
-      _to: 3
-      _oneWay: 0
-  - _data: {fileID: 11400000, guid: cb481d5371465d14aa8822222068a799, type: 2}
-    _roomPrefab: {fileID: 3994319750776063750, guid: d09253bf2f1a0b6439d99821509d5410, type: 3}
-    _worldPosition: {x: 12, y: 0}
-    _links:
-    - _from: 1
-      _toRoomIndex: 2
-      _to: 3
-      _oneWay: 0
-  - _data: {fileID: 11400000, guid: 425d447de2d28534ca0e0ff237345c88, type: 2}
-    _roomPrefab: {fileID: 8379563562898739331, guid: 30203b04a7895074d9b18aadade88ec1, type: 3}
-    _worldPosition: {x: 36, y: 0}
+    _roomPrefab: {fileID: 8379563562898739331, guid: 531233b3124884f449fc635201829b5e, type: 3}
+    _worldPosition: {x: 0, y: 0}
     _links:
     - _from: 0
-      _toRoomIndex: 3
+      _toRoomIndex: 1
       _to: 2
       _oneWay: 0
-  - _data: {fileID: 11400000, guid: 425d447de2d28534ca0e0ff237345c88, type: 2}
-    _roomPrefab: {fileID: 8379563562898739331, guid: 30203b04a7895074d9b18aadade88ec1, type: 3}
-    _worldPosition: {x: 60, y: 0}
+  - _data: {fileID: 11400000, guid: 37b78208c372f984091b84c8e1a7a1b2, type: 2}
+    _roomPrefab: {fileID: 8379563562898739331, guid: 6a6ebfae9f1da6b4ebaee8e0c5d5e19d, type: 3}
+    _worldPosition: {x: 50, y: 50}
     _links:
-    - _from: 1
-      _toRoomIndex: 4
-      _to: 3
+    - _from: 0
+      _toRoomIndex: 0
+      _to: 2
       _oneWay: 0
-  - _data: {fileID: 11400000, guid: d59bb6fd10b8ecb4ba9c4d7cbfcf6379, type: 2}
-    _roomPrefab: {fileID: 8379563562898739331, guid: 22859f26a62cdb347974340eea43d424, type: 3}
-    _worldPosition: {x: 84, y: 0}
-    _links: []

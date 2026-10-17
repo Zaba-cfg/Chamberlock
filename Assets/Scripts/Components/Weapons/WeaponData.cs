@@ -1,3 +1,4 @@
+using Components.Weapons.Enums;
 using UnityEngine;
 
 namespace Components.Weapons

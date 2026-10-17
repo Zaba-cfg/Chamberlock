@@ -1,4 +1,5 @@
 using Components.Weapons;
+using Components.Weapons.Enums;
 using TMPro;
 using UnityEngine;
 
