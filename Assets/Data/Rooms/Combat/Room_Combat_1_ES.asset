@@ -17,4 +17,6 @@ MonoBehaviour:
   _enemies:
   - _enemyPrefab: {fileID: 3541301891820628173, guid: 5b1a958b0d3fa6748b6ed19819612fd1, type: 3}
     _count: 1
+  - _enemyPrefab: {fileID: 5256291063034213879, guid: 65b38c55c79eb5241a6c13fd968ac9ca, type: 3}
+    _count: 1
   _itemPickupPrefab: {fileID: 0}

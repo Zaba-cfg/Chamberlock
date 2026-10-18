@@ -214,7 +214,7 @@ Scripts/
 ├── Interfaces/          # Contracts (IMoveInput, IInteractable, IModifierProvider)
 ├── Entities/            # Composition shells
 │   ├── PlayerRelated/   # Player.cs, PlayerDeathHandler.cs
-│   └── EnemyRelated/    # Enemy.cs, MeleeEnemy.cs
+│   └── EnemyRelated/    # Enemy.cs, MeleeEnemy.cs, ShooterEnemy.cs
 ├── Components/
 │   ├── Base/            # Domain-agnostic reusable components
 │   │   ├── HealthRelated/   # Health, HealthVisualFeedback, HealthAudioFeedback, DestroyOnDeath
@@ -240,7 +240,7 @@ Scripts/
 │   │   ├── EnemyKillCounter.cs, EnemyTargetAssigner.cs
 │   │   ├── EnemyData.cs (ScriptableObject), EnemyDataApplier.cs
 │   │   ├── EnemyStartingWeapon.cs
-│   │   ├── EnemyBehaviorRelated/  # EnemyBehavior.cs (base), EnemyState.cs, MeleeBehavior.cs
+│   │   ├── EnemyBehaviorRelated/  # EnemyBehavior.cs (base), EnemyState.cs, MeleeBehavior.cs, ShooterBehavior.cs
 │   │   └── (planned) ShooterBehavior, RobberBehavior, BossBehavior, BossPhase
 │   ├── Player/          # Player-specific components
 │   │   └── PlayerDeathHandler.cs
@@ -650,7 +650,7 @@ GameplayCanvas
 | Type | Behavior | Attack Pattern |
 |------|----------|----------------|
 | **Melee** | Always closes distance to the player and strikes at melee reach. Only ever equips melee weapons. | Melee (melee weapon) |
-| **Shooter** | Keeps distance. Stops at optimal range and fires. | Ranged (projectile) |
+| **Shooter** | Shoots while slowly backing away (0.6× retreat speed). When its weapon empties, picks up a new projectile weapon from the floor; keeps its distance while unarmed. | Ranged (projectile) |
 | **Rusher** | Charges in a straight line when in range. Brief telegraph. Melee only. | Dash (charge) |
 | **Floater** | Moves erratically (sine wave). Fires sporadically. | Ranged (slow, erratic) |
 | **Tank** | Slow, high HP. Uses a heavy slow weapon with great damage and slow projectile speed. | Ranged (heavy, slow) |
@@ -662,7 +662,7 @@ GameplayCanvas
 ```
 EnemyBehavior (base)        ← existing FSM skeleton + CanAcceptWeapon() hook (Template Method)
   ├── MeleeBehavior         ← done: melee-only weapon filter (4.2)
-  ├── ShooterBehavior       ← (planned) maintain distance, fire
+  ├── ShooterBehavior       ← done: retreat while firing, projectile-only filter (4.3)
   ├── RusherBehavior        ← (planned) telegraph, charge, cooldown (melee only)
   ├── TankBehavior          ← (planned) slow approach, heavy slow projectile
   ├── RobberBehavior        ← (planned) steal weapon, flee, then shoot
@@ -697,16 +697,45 @@ Attacking
 - **No fallback to ranged**: unlike the baseline enemy, it never equips a firearm; if no melee weapon is available, it keeps pressuring the player barehanded (contact damage is a future option).
 - **Distinct from Rusher**: the Rusher telegraphs and dashes (a charge attack with cooldown); the Melee enemy simply walks up and swings — steady pressure, no dash.
 
+#### Shooter Enemy FSM Detail
+> Kiting mirror of the baseline enemy: same FSM, but it backs away instead of closing in.
+
+```
+Chasing (toward the player)
+  ├─ has projectile weapon & in attack range → Attacking
+  ├─ no weapon → SeekingWeapon (projectile weapons only)
+  └─ holds a melee weapon → drop it → SeekingWeapon
+
+SeekingWeapon (projectile filter)
+  ├─ equips closest unequipped, non-empty weapon whose
+  │   WeaponFireStrategy is ProjectileFireStrategy
+  ├─ none available → stays in SeekingWeapon: faces the player
+  │   and retreats (keeps distance while barehanded)
+  └─ on pickup → Chasing
+
+Attacking
+  ├─ faces the player, fires while retreating (0.6× speed)
+  ├─ projectile weapons reload (Pistol) — keeps backing away meanwhile
+  ├─ weapon empty (mag + reserve 0) → drop it → SeekingWeapon
+  └─ player out of attack range → Chasing (walks back into range)
+```
+
+- **Retreat mechanics**: `EnemyAIInput.SetRetreating(bool)` inverts the move direction; serialized `_retreatSpeedMultiplier` (Shooter prefab: `0.6`) makes backing off slower than approaching. `ShooterBehavior` flips the flag per state: `false` in Chasing/SeekingWeapon, `true` in Attacking.
+- **Unarmed behavior**: if no acceptable weapon exists on the floor, it stays in `SeekingWeapon`, faces the player and retreats — it never walks into melee empty-handed (unlike the baseline fallback).
+- **Reload loop**: `HandleAttacking` keeps firing; at 0 ammo `Weapon.Reload()` runs while the enemy continues to retreat (Pistol: 7 mag / 21 reserve).
+
 #### Files (implemented)
 | File | Role |
 |------|------|
 | `EnemyData.cs` (SO) | Per-type stats: name, sprite, max HP, move speed, attack range. Menu: `Enemies/Enemy Data` |
 | `EnemyDataApplier.cs` | `[DefaultExecutionOrder(-90)]` — pushes `EnemyData` into `Health.SetMaxHealth`, `Movement.SetBaseSpeed`, `EnemyCombat.SetAttackRange`, `SpriteRenderer` at Awake |
 | `MeleeBehavior.cs` | `EnemyBehavior` subclass — overrides `CanAcceptWeapon()` (melee only) |
+| `ShooterBehavior.cs` | `EnemyBehavior` subclass — projectile-only filter + retreat-while-firing (`SetRetreating` per state) |
 | `EnemyStartingWeapon.cs` | Spawns the assigned weapon prefab and equips it in `Start` |
 | `MeleeEnemy.cs` (`Entities/EnemyRelated`) | Entity shell — requires `MeleeBehavior` instead of `EnemyBehavior` |
+| `ShooterEnemy.cs` (`Entities/EnemyRelated`) | Entity shell — requires `ShooterBehavior` |
 
-**Status**: 🚧 Code complete; `MeleeEnemy` prefab + `EnemyData_Melee` asset authoring pending in the Editor. Shooter/Robber/Boss behaviors not started.
+**Status**: 🚧 Melee Enemy (4.1 + 4.2) **complete** — code, assets and prefab verified in Play mode. Shooter Enemy (4.3) code complete — `EnemyData_Shooter` asset + `ShooterEnemy` prefab pending, verification pending. Robber/Boss not started.
 
 #### Robber FSM Detail
 ```
@@ -850,6 +879,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 |--------|-------------|
 | **Player** | Player entity shell with all components (100 HP, speed 5, `PlayerDeathHandler`) |
 | **Enemy** | Enemy entity shell with AI, combat, weapon detection, `DestroyOnDeath`, `EnemyKillCounter` |
+| **MeleeEnemy** | Melee enemy (prefab variant of Enemy) — `MeleeBehavior`, `EnemyDataApplier` (`EnemyData_Melee`), `EnemyStartingWeapon` (Katana) |
 | **Projectile** | Bullet — speed 15, pooled, 5 s lifetime, trigger collider |
 | **Pistol / Colt / Mosin / Katana** | Weapon pickups (each with its own `WeaponData`, sprite and audio feedback) |
 | **PoolManagerProjectile** | `PoolManager` pre-configured for projectile pooling |
@@ -922,6 +952,8 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | Weapon Detection | ✅ Done | Area-based weapon scanning |
 | Player Input | ✅ Done | Mouse + Gamepad, IMoveInput |
 | Enemy AI | ✅ Done | 3-state FSM, weapon seeking, combat |
+| EnemyData | ✅ Done | `Components/EnemyComponents` — `EnemyData` (SO) + `EnemyDataApplier`; per-type stats pushed into Health/Movement/EnemyCombat at spawn |
+| Melee Enemy | ✅ Done | First per-type behavior — `MeleeBehavior` (melee-only weapon filter via `CanAcceptWeapon` hook), `MeleeEnemy` prefab, `EnemyStartingWeapon` (spawns equipped) |
 | Weapon UI | ✅ Done | `WeaponHudUI` — icon, name, ammo, reload (legacy `WeaponAmmoUI` in SampleScene) |
 | Debug Tools | ✅ Done | Loggers + testers for all systems |
 | Object Pool | ✅ Done | `Systems/Pool` — `ObjectPool<T>` + `PoolManager`; projectiles pooled (prewarm 32, grows on demand) |
@@ -949,7 +981,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 
 | Gap | Category | Priority | Roadmap |
 |-----|----------|----------|---------|
-| **Enemy types** — Melee, Shooter, Robber (Phase 4); Rusher, Floater, Tank, Support (later) | Core | 🔴 High | 4.2–4.4, 7.3 |
+| **Enemy types** — Shooter, Robber (Phase 4); Rusher, Floater, Tank, Support (later) | Core | 🔴 High | 4.3–4.4, 7.3 |
 | **Boss** — multi-phase enemy | Core | 🔴 High | 5.2–5.5 |
 | **Modifier HUD** — active modifiers + duration | UI | 🟡 Medium | 6.9 |
 | **Animations** — idle / walk / attack / death | Visual | 🟡 Medium | 6.2 |
@@ -1023,9 +1055,9 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 
 | #   | Task | Description                                                                    | Depends On |
 |-----|------|--------------------------------------------------------------------------------|------------|
-| 4.1 | **EnemyData (SO)** 🚧 | Per-type stats: speed, HP, attack range, sprite. Code done (`EnemyData` + `EnemyDataApplier`); `EnemyData_Melee` asset pending. | — |
-| 4.2 | **Melee Enemy** 🚧 | Only equips melee weapons. Always closes distance to the player and strikes at reach. First per-type behavior (`MeleeBehavior`). Code done; `MeleeEnemy` prefab pending. | 4.1, 2.1 |
-| 4.3 | **Shooter Enemy** | Maintains distance. Fires projectiles at player. | 4.1, 2.1, 1.1 |
+| 4.1 | **EnemyData (SO)** ✅ | Per-type stats: speed, HP, attack range, sprite. `EnemyData` + `EnemyDataApplier`; `EnemyData_Melee` asset authored. | — |
+| 4.2 | **Melee Enemy** ✅ | Only equips melee weapons. Always closes distance to the player and strikes at reach. First per-type behavior (`MeleeBehavior`); `MeleeEnemy` prefab + `EnemyStartingWeapon` (Katana). Verified in Play mode. | 4.1, 2.1 |
+| 4.3 | **Shooter Enemy** 🚧 | Shoots while slowly backing away. Projectile-only weapon filter; seeks a new firearm when empty. Code done (`ShooterBehavior`); `EnemyData_Shooter` + `ShooterEnemy` prefab pending. | 4.1, 2.1, 1.1 |
 | 4.4 | **Robber Enemy** | Steals player weapon if equipped, flees, then shoots. Hides if player unarmed. | 4.1, 2.1, 1.1 |
 | 4.5 | **Enemy Spawner** ✅ | Room-level spawner. Spawns enemies from `RoomData` definitions. | 3.7 |
 
@@ -1082,6 +1114,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | **Weapons** | Pistol, Colt, Mosin, Katana |
 | **Fire Strategies** | Melee, Projectile |
 | **Modifiers** | DoubleDamage, DoubleFireRate, DoubleReload, DoubleSpeed, DoubleShot |
+| **Enemies** | `Data/Enemies/EnemyData_Melee` |
 | **Rooms** | `Data/Rooms/Combat/Room_Combat_1_ES`, `Data/Rooms/Start/Room_Start_1_N` (Item + Boss rooms not authored yet) |
 | **Maps** | `Data/Maps/Map_Test` — 2 entries: Start → Combat |
 
@@ -1115,6 +1148,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 |--------|---------|
 | Player | Player entity (Health, PlayerInput, WeaponHolder, LookDirection, Interaction, `PlayerDeathHandler`) |
 | Enemy | Enemy entity (AI, WeaponHolder, Health, `DestroyOnDeath`, `EnemyKillCounter`) |
+| MeleeEnemy | Melee enemy entity — prefab variant of Enemy (`MeleeBehavior`, `EnemyDataApplier`, `EnemyStartingWeapon` with Katana) |
 | Projectile | Bullet entity (pooled) |
 | Colt / Pistol / Mosin / Katana | Weapon pickups (each with its own `WeaponData`) |
 | PoolManagerProjectile | `PoolManager` pre-configured for projectile pooling |

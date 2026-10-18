@@ -14,11 +14,11 @@ namespace Components.EnemyComponents.EnemyBehaviorRelated
     {
         public EnemyState CurrentState { get; private set; }
     
-        private EnemyAIInput _aiInput;
-        private EnemyCombat _combat;
-        private EnemyWeaponDecision _weaponDecision;
-        private LookDirection _lookDirection;
-        private WeaponHolder _weaponHolder;
+        protected EnemyAIInput _aiInput;
+        protected EnemyCombat _combat;
+        protected EnemyWeaponDecision _weaponDecision;
+        protected LookDirection _lookDirection;
+        protected WeaponHolder _weaponHolder;
     
         [SerializeField] private Transform _target;
         public Transform Target => _target;
@@ -63,7 +63,7 @@ namespace Components.EnemyComponents.EnemyBehaviorRelated
             }
         }
 
-        private void HandleChasing()
+        protected virtual void HandleChasing()
         {
             _aiInput.SetTarget(_target);
             _lookDirection.SetDirection(_target.position - transform.position);
@@ -95,7 +95,7 @@ namespace Components.EnemyComponents.EnemyBehaviorRelated
             }
         }
     
-        private void HandleSeekingWeapon()
+        protected virtual void HandleSeekingWeapon()
         {
             Weapon weapon = _weaponDecision.GetClosestAvailableWeapon(CanAcceptWeapon);
 
@@ -117,7 +117,7 @@ namespace Components.EnemyComponents.EnemyBehaviorRelated
             }
         }
     
-        private void HandleAttacking()
+        protected virtual void HandleAttacking()
         {
             if (!_weaponHolder.HasWeapon)
             {
