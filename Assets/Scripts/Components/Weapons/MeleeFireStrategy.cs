@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Components.Base;
 using Components.Base.HealthRelated;
+using Interfaces;
 using UnityEngine;
 
 namespace Components.Weapons
@@ -38,6 +39,9 @@ namespace Components.Weapons
 
             HashSet<Health> damagedTargets = new();
 
+            GameObject owner = context.Weapon.Owner;
+            bool ownerIsEnemy = owner.GetComponentInParent<IEnemy>() != null;
+
             for (int i = 0; i < context.AttackCount; i++)
             {
                 float angle = startAngle + angleStep * i;
@@ -59,10 +63,13 @@ namespace Components.Weapons
                     if (hit.isTrigger)
                         continue;
 
-                    if (hit.gameObject == context.Weapon.Owner || hit.transform.IsChildOf(context.Weapon.Owner.transform))
+                    if (hit.gameObject == owner || hit.transform.IsChildOf(owner.transform))
                         continue;
 
                     if (!hit.TryGetComponent(out Health health))
+                        continue;
+
+                    if (ownerIsEnemy && hit.GetComponentInParent<IEnemy>() != null)
                         continue;
 
                     if (!damagedTargets.Add(health))

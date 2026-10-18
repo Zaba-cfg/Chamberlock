@@ -1,6 +1,7 @@
 using System;
 using Components.Base;
 using Components.Base.HealthRelated;
+using Interfaces;
 using Systems.Pool;
 using UnityEngine;
 
@@ -18,6 +19,7 @@ namespace Components.Projectile
 
         private float _damage;
         private GameObject _owner;
+        private bool _ownerIsEnemy;
         private float _returnTime;
 
         private void Awake()
@@ -44,6 +46,7 @@ namespace Components.Projectile
 
             _damage = damage;
             _owner = owner;
+            _ownerIsEnemy = owner.GetComponentInParent<IEnemy>() != null;
 
             _rigidbody.linearVelocity = direction.normalized * _speed;
 
@@ -60,7 +63,12 @@ namespace Components.Projectile
                 return;
 
             if (other.TryGetComponent(out Health health))
+            {
+                if (_ownerIsEnemy && other.GetComponentInParent<IEnemy>() != null)
+                    return;
+
                 health.TakeDamage(_damage);
+            }
 
             ReturnToPool();
         }

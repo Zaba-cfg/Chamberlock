@@ -202,7 +202,7 @@ The project follows a **composition-over-inheritance** architecture. Entities (`
 | **Observer** | `Action` events on Health, Weapon, WeaponHolder, ModifierInventory | Decoupled cross-component communication |
 | **Pipeline** | `ModifierCalculator` — Add-then-Multiply | Deterministic stat modification across providers |
 | **State Machine** | `EnemyBehavior` FSM (Chasing, SeekingWeapon, Attacking) | Enemy AI decision-making |
-| **Interface Segregation** | `IMoveInput`, `IInteractable`, `IModifierProvider` | Contracts with 1–2 members; classes choose what they implement |
+| **Interface Segregation** | `IMoveInput`, `IInteractable`, `IModifierProvider`, `IEnemy` | Marker or 1–2 member contracts; classes choose what they implement |
 | **Object Pool** | `ObjectPool<T>` + `PoolManager` | Reuse projectile instances — avoid Instantiate/Destroy GC pressure |
 | **Global State + Service Singletons** | `GameManager`, `RunManager`, `SceneLoader` (`Systems/Game`) | One owner per concern; game state and scene changes flow through a single place |
 | **Room Controller** | `RoomController` (planned) | Locks exits, spawns enemies, tracks room clear state |
@@ -212,7 +212,7 @@ The project follows a **composition-over-inheritance** architecture. Entities (`
 
 ```
 Scripts/
-├── Interfaces/          # Contracts (IMoveInput, IInteractable, IModifierProvider)
+├── Interfaces/          # Contracts (IMoveInput, IInteractable, IModifierProvider, IEnemy)
 ├── Entities/            # Composition shells
 │   ├── PlayerRelated/   # Player.cs, PlayerDeathHandler.cs
 │   └── EnemyRelated/    # Enemy.cs, MeleeEnemy.cs, ShooterEnemy.cs, RobberEnemy.cs
@@ -368,7 +368,7 @@ Scripts/
 #### Fire Strategies
 | Strategy | Implementation |
 |----------|---------------|
-| `MeleeFireStrategy` | `Physics2D.OverlapCircleAll` with spread angle, deduplication via `HashSet<Health>`, minimum radius multiplier |
+| `MeleeFireStrategy` | `Physics2D.OverlapCircleAll` with spread angle, deduplication via `HashSet<Health>`, minimum radius multiplier; enemy owners skip `IEnemy` targets (no friendly fire) |
 | `ProjectileFireStrategy` | Fetches a `Projectile` from `PoolManager` per attack count with spread angle |
 
 **Assets**:
@@ -379,7 +379,7 @@ Scripts/
 | Mosin | 30 | 1 | 5 | 5s | 15 | 10° | Projectile | Magazine |
 | Katana | 10 | 1 | 1 | 0s | 0 | 90° | Melee | Infinite |
 
-**Status**: ✅ Complete
+**Status**: ✅ Complete (melee no-friendly-fire 🚧 pending Play-mode verification)
 
 ---
 
@@ -389,11 +389,12 @@ Scripts/
 
 - `Projectile` moves via `Rigidbody2D.linearVelocity` in direction
 - Deals damage on `OnTriggerEnter2D` via `Health.TakeDamage`
+- Enemy-fired projectiles **pass through enemies** (owner side cached at `Initialize` via the `IEnemy` marker; ally hits skip both damage and pool return) — consistent with LOS gating (§4.10), which also ignores allies
 - Implements `IPoolable` — zeroes its velocity on get/return
 - Returns to the pool on hit or after its 5 s lifetime (never `Destroy`ed)
 - `ProjectileFireStrategy` fetches instances from `PoolManager` (§4.13)
 
-**Status**: ✅ Complete
+**Status**: ✅ Complete (no-friendly-fire 🚧 pending Play-mode verification)
 
 ---
 
@@ -958,7 +959,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | **Strategy pattern for fire behavior** | `WeaponFireStrategy` (abstract SO) — melee vs projectile vs future types are interchangeable |
 | **Add-then-Multiply pipeline** | Deterministic, order-independent for same operation type — standard game stat formula |
 | **Events for decoupling** | All cross-component communication via `Action` — no direct references between feedback and logic |
-| **Interface segregation** | `IMoveInput`, `IInteractable`, `IModifierProvider` — minimal contracts, multiple implementations |
+| **Interface segregation** | `IMoveInput`, `IInteractable`, `IModifierProvider`, `IEnemy` — minimal contracts, multiple implementations |
 | **Enemy AI as FSM** | Simple 3-state machine — easy to extend, easy to debug |
 | **No `.asmdef` files** | Default `Assembly-CSharp` — simpler for a learning project of this scale |
 | **New Input System only** | Legacy input disabled — clean, future-proof |

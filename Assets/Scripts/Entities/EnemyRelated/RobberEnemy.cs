@@ -4,6 +4,7 @@ using Components.Base.Weapon;
 using Components.EnemyComponents;
 using Components.EnemyComponents.EnemyBehaviorRelated;
 using Components.Weapons;
+using Interfaces;
 using UnityEngine;
 
 namespace Entities.EnemyRelated
@@ -18,7 +19,7 @@ namespace Entities.EnemyRelated
     [RequireComponent(typeof(EnemyWeaponDecision))]
     [RequireComponent(typeof(RobberBehavior))]
 
-    public class RobberEnemy : MonoBehaviour
+    public class RobberEnemy : MonoBehaviour, IEnemy
     {
     }
 }

@@ -4,6 +4,7 @@ using Components.Base.Weapon;
 using Components.EnemyComponents;
 using Components.EnemyComponents.EnemyBehaviorRelated;
 using Components.Weapons;
+using Interfaces;
 using UnityEngine;
 
 namespace Entities.EnemyRelated
@@ -18,7 +19,7 @@ namespace Entities.EnemyRelated
     [RequireComponent(typeof(EnemyWeaponDecision))]
     [RequireComponent(typeof(ShooterBehavior))]
 
-    public class ShooterEnemy : MonoBehaviour
+    public class ShooterEnemy : MonoBehaviour, IEnemy
     {
     }
 }
