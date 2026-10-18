@@ -20,6 +20,11 @@ namespace Components.EnemyComponents
             _target = target;
         }
 
+        public void SetAttackRange(float attackRange)
+        {
+            _attackRange = attackRange;
+        }
+
         private WeaponHolder _weaponHolder;
 
         private void Awake()

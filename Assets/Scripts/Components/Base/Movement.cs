@@ -25,6 +25,11 @@ namespace Components.Base
                 throw new MissingComponentException($"{name} requires a component implementing IMoveInput.");
         }
 
+        public void SetBaseSpeed(float baseSpeed)
+        {
+            _baseSpeed = baseSpeed;
+        }
+
         private void FixedUpdate()
         {
             var inputValue = Vector2.ClampMagnitude(_moveInput.MoveInput,1f);

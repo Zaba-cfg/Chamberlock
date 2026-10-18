@@ -19,6 +19,12 @@ namespace Components.Base.HealthRelated
         {
             CurrentHealth = MaxHealth;
         }
+
+        public void SetMaxHealth(float maxHealth)
+        {
+            _maxHealth = maxHealth;
+            CurrentHealth = _maxHealth;
+        }
     
         public void RestoreFullHealth()
         {

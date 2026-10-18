@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e635624c18fd5044986bccfa10c7b866, type: 3}
+  m_Name: EnemyData_Melee
+  m_EditorClassIdentifier: Assembly-CSharp::Components.EnemyComponents.EnemyData
+  _enemyName: Melee Enemy
+  _sprite: {fileID: 8596640243658272642, guid: fa6b811fa14a77444806c8bde07f1000, type: 3}
+  _maxHealth: 50
+  _moveSpeed: 2.5
+  _attackRange: 1.25

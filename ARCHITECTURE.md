@@ -1,7 +1,7 @@
 # Project-Roguelike — Architecture & Roadmap
 
 > **Document State**: Alive roadmap — updated during development.
-> **Last Updated**: 2026-10-12
+> **Last Updated**: 2026-10-16
 
 ---
 
@@ -79,8 +79,8 @@
 | Entity | Body (visible) | Canvas | Footprint |
 |--------|----------------|--------|-----------|
 | **Player** | 18×26 px | 32×32 px | 1.0 × 1.5 tiles |
-| **Small enemy** (Chaser) | 16×24 px | 32×32 px | 1.0 × 1.5 tiles |
-| **Medium enemy** (Shooter, Rusher) | 16×24 px | 32×32 px | 1.0 × 1.5 tiles |
+| **Small enemy** (baseline `Enemy`) | 16×24 px | 32×32 px | 1.0 × 1.5 tiles |
+| **Medium enemy** (Melee, Shooter, Rusher) | 16×24 px | 32×32 px | 1.0 × 1.5 tiles |
 | **Large enemy** (Tank) | 24×32 px | 48×48 px | 1.5 × 2.0 tiles |
 | **Boss** | 48×48 px | 64×64 px | 3.0 × 3.0 tiles |
 
@@ -148,7 +148,7 @@ A **2D top-down roguelite dungeon crawler** inspired by *The Binding of Isaac* a
 **Key Pillars:**
 - **Weapon Variety**: Melee, projectile, and future weapon types — each with unique fire strategies
 - **Modifier Stacking**: Combine modifiers (Double Damage + Double Fire Rate + Double Shot) to create broken builds
-- **Enemy Variety**: Different enemy types (Chaser, Shooter, Rusher, Robber, Tank) require different strategies
+- **Enemy Variety**: Different enemy types (baseline `Enemy`, Melee, Shooter, Robber, Rusher, Tank, Support) require different strategies
 - **Permadeath**: Every run is a fresh start. No continues, no checkpoints.
 
 ### 2.3 The Game Loop
@@ -213,8 +213,8 @@ The project follows a **composition-over-inheritance** architecture. Entities (`
 Scripts/
 ├── Interfaces/          # Contracts (IMoveInput, IInteractable, IModifierProvider)
 ├── Entities/            # Composition shells
-│   ├── Player/          # Player.cs
-│   └── Enemy/           # Enemy.cs
+│   ├── PlayerRelated/   # Player.cs, PlayerDeathHandler.cs
+│   └── EnemyRelated/    # Enemy.cs, MeleeEnemy.cs
 ├── Components/
 │   ├── Base/            # Domain-agnostic reusable components
 │   │   ├── HealthRelated/   # Health, HealthVisualFeedback, HealthAudioFeedback, DestroyOnDeath
@@ -235,12 +235,13 @@ Scripts/
 │   │   ├── ModifierInstance.cs, ModifierInventory.cs, ModifierCalculator.cs
 │   │   ├── ModifierStat.cs, ModifierOperation.cs
 │   │   └── ModifierPickup.cs, TemporaryModifierPickup.cs
-│   ├── Enemy/           # Enemy AI (per-type subclasses)
+│   ├── EnemyComponents/ # Enemy AI (per-type subclasses)
 │   │   ├── EnemyAIInput.cs, EnemyCombat.cs, EnemyWeaponDecision.cs
-│   │   ├── EnemyKillCounter.cs
-│   │   ├── EnemyBehavior/  # EnemyBehavior.cs (base), EnemyState.cs
-│   │   ├── Types/          # (planned) ChaserEnemy, ShooterEnemy, RusherEnemy, etc.
-│   │   └── Boss/           # (planned) BossBehavior, BossPhase
+│   │   ├── EnemyKillCounter.cs, EnemyTargetAssigner.cs
+│   │   ├── EnemyData.cs (ScriptableObject), EnemyDataApplier.cs
+│   │   ├── EnemyStartingWeapon.cs
+│   │   ├── EnemyBehaviorRelated/  # EnemyBehavior.cs (base), EnemyState.cs, MeleeBehavior.cs
+│   │   └── (planned) ShooterBehavior, RobberBehavior, BossBehavior, BossPhase
 │   ├── Player/          # Player-specific components
 │   │   └── PlayerDeathHandler.cs
 │   ├── PlayerInput/     # Unity Input System bridge
@@ -636,7 +637,7 @@ GameplayCanvas
 - Templates are pre-built tilemap rooms with spawn points
 - Generator connects them in a valid graph
 
-**Status**: 🚧 In progress — 3.1–3.5 (room core + map/transitions), 3.7 (enemy spawner), 3.8 (item room), 3.9 (start room), 3.10 (backtracking) and the boss-room run end are complete; 3.6 (tilemap) pending. Clearing a `Boss` room ends the run (reuses the Game Over screen; dedicated victory screen is 5.5).
+**Status**: ✅ Complete — 3.1–3.5 (room core + map/transitions), 3.7 (enemy spawner), 3.9 (start room) and 3.10 (backtracking) are done. 3.6 (room tilemap) was **dropped** — rooms are hand-crafted prefabs with sprite art, and a spare 16×16 tileset lives in `Assets/Sprites/Room/TileSet`. **Content still open**: no Item room and no Boss room are currently authored — the `RoomItemSpawner` code path and the boss-run-end path exist but nothing is wired to them (the spawner components are also disabled on both live room prefabs). Clearing a `Boss` room ends the run (reuses the Game Over screen; dedicated victory screen is 5.5).
 
 ---
 
@@ -648,7 +649,7 @@ GameplayCanvas
 
 | Type | Behavior | Attack Pattern |
 |------|----------|----------------|
-| **Chaser** | Moves directly toward player. Melee only. | Melee |
+| **Melee** | Always closes distance to the player and strikes at melee reach. Only ever equips melee weapons. | Melee (melee weapon) |
 | **Shooter** | Keeps distance. Stops at optimal range and fires. | Ranged (projectile) |
 | **Rusher** | Charges in a straight line when in range. Brief telegraph. Melee only. | Dash (charge) |
 | **Floater** | Moves erratically (sine wave). Fires sporadically. | Ranged (slow, erratic) |
@@ -659,14 +660,53 @@ GameplayCanvas
 
 #### Implementation Approach
 ```
-EnemyBehavior (base)        ← existing FSM skeleton
-  ├── ChaserBehavior        ← override: seek + contact damage (melee only)
-  ├── ShooterBehavior       ← override: maintain distance, fire
-  ├── RusherBehavior        ← override: telegraph, charge, cooldown (melee only)
-  ├── TankBehavior          ← override: slow approach, heavy slow projectile
-  ├── RobberBehavior        ← override: steal weapon, flee, then shoot
-  └── BossBehavior          ← override: phase system, minion spawning
+EnemyBehavior (base)        ← existing FSM skeleton + CanAcceptWeapon() hook (Template Method)
+  ├── MeleeBehavior         ← done: melee-only weapon filter (4.2)
+  ├── ShooterBehavior       ← (planned) maintain distance, fire
+  ├── RusherBehavior        ← (planned) telegraph, charge, cooldown (melee only)
+  ├── TankBehavior          ← (planned) slow approach, heavy slow projectile
+  ├── RobberBehavior        ← (planned) steal weapon, flee, then shoot
+  └── BossBehavior          ← (planned) phase system, minion spawning
 ```
+
+#### Melee Enemy FSM Detail
+> First per-type behavior of Phase 4. Same 3-state FSM as the baseline `Enemy` — only the decision rules change.
+
+```
+Chasing (always toward the player)
+  ├─ has melee weapon & in strike range → Attacking
+  ├─ no weapon → SeekingWeapon (melee weapons only)
+  └─ holds a ranged weapon → drop it → SeekingWeapon
+
+SeekingWeapon (melee filter)
+  ├─ equips closest unequipped, non-empty weapon whose
+  │   WeaponFireStrategy is MeleeFireStrategy
+  ├─ no melee weapon available → Chasing (chases barehanded; never
+  │   settles for a ranged weapon)
+  └─ on pickup → Chasing
+
+Attacking
+  ├─ faces the player, fires at melee reach (short attack range)
+  ├─ melee weapons are Infinite ammo → never reloads, never drops
+  └─ player out of reach → Chasing (immediately closes distance again)
+```
+
+- **Weapon filter**: `EnemyWeaponDecision.GetClosestAvailableWeapon(filter)` / `TryEquipNearbyWeapon(filter)` take an optional `Func<Weapon, bool>` — `MeleeBehavior` overrides `CanAcceptWeapon()` to accept only weapons whose `WeaponFireStrategy is MeleeFireStrategy`; the baseline `Enemy` keeps accepting any weapon (hook returns `true`).
+- **Attack range**: driven by `EnemyData.AttackRange` (applied via `EnemyDataApplier` → `EnemyCombat.SetAttackRange`), tuned to the melee weapon's reach (~1.25, matching `MeleeFireStrategy._range`) so `CanAttack()` only succeeds inside strike distance — the enemy never kites.
+- **Spawn equipped**: `EnemyStartingWeapon` instantiates a weapon prefab (e.g. Katana) and `WeaponHolder.Equip`s it in `Start`, so the enemy is armed even when the room spawned no melee pickups.
+- **No fallback to ranged**: unlike the baseline enemy, it never equips a firearm; if no melee weapon is available, it keeps pressuring the player barehanded (contact damage is a future option).
+- **Distinct from Rusher**: the Rusher telegraphs and dashes (a charge attack with cooldown); the Melee enemy simply walks up and swings — steady pressure, no dash.
+
+#### Files (implemented)
+| File | Role |
+|------|------|
+| `EnemyData.cs` (SO) | Per-type stats: name, sprite, max HP, move speed, attack range. Menu: `Enemies/Enemy Data` |
+| `EnemyDataApplier.cs` | `[DefaultExecutionOrder(-90)]` — pushes `EnemyData` into `Health.SetMaxHealth`, `Movement.SetBaseSpeed`, `EnemyCombat.SetAttackRange`, `SpriteRenderer` at Awake |
+| `MeleeBehavior.cs` | `EnemyBehavior` subclass — overrides `CanAcceptWeapon()` (melee only) |
+| `EnemyStartingWeapon.cs` | Spawns the assigned weapon prefab and equips it in `Start` |
+| `MeleeEnemy.cs` (`Entities/EnemyRelated`) | Entity shell — requires `MeleeBehavior` instead of `EnemyBehavior` |
+
+**Status**: 🚧 Code complete; `MeleeEnemy` prefab + `EnemyData_Melee` asset authoring pending in the Editor. Shooter/Robber/Boss behaviors not started.
 
 #### Robber FSM Detail
 ```
@@ -689,10 +729,7 @@ Attacking
 ```
 
 - Each type is a `MonoBehaviour` that inherits from or composes `EnemyBehavior`
-- `EnemyData` (ScriptableObject) per type: speed, HP, attack pattern, sprite
 - `EnemyCombat` adapts per type (some use `WeaponHolder`, some use custom logic)
-
-**Status**: 🔲 Not started
 
 ---
 
@@ -861,7 +898,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | **No `.asmdef` files** | Default `Assembly-CSharp` — simpler for a learning project of this scale |
 | **New Input System only** | Legacy input disabled — clean, future-proof |
 | **Room-based spatial loop** | Inspired by *The Binding of Isaac* — rooms are the core unit of progression |
-| **Predefined room layouts** | v1 uses hand-crafted tilemap rooms — procedural generation deferred to Phase 7 |
+| **Predefined room layouts** | v1 uses hand-crafted room prefabs (with a spare 16×16 tileset available) — procedural generation deferred to Phase 7 |
 | **Object pooling from start** | Avoids GC spikes — projectiles are pooled and reused instead of instantiated/destroyed; enemies/pickups can register later |
 | **Audio via mixer groups** | Music and SFX route to `AudioMixer` groups — one place controls each category's volume; `GameSettings` feeds it in decibels |
 | **Enemy types via composition** | Each enemy type is a `MonoBehaviour` composing or extending base FSM — not a monolithic class |
@@ -901,8 +938,8 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | Map & Transitions | ✅ Done | `Components/Map` — MapData/DungeonManager/RoomCamera + fade overlay; map-driven room swapping verified |
 | Enemy Spawner | ✅ Done | `Components/Rooms` — `RoomEnemySpawner` + `RoomSpawnPoint`/`EnemySpawnEntry`; combat rooms spawn once from `RoomData.Enemies` |
 | Backtracking | ✅ Done | Rooms cached (never destroyed) + auto-reversed door links; cleared state, drops, and taken pickups persist |
-| Item Spawner | ✅ Done | `Components/Rooms` — `RoomItemSpawner` + `RoomData.ItemPickupPrefab`; item rooms spawn one weapon/modifier on enter |
-| Boss Room (placeholder) | ✅ Done | `Room_Boss` + `BossRoom` (`RoomType.Boss`, one enemy) — same `RoomEnemySpawner`; clearing it ends the run via the Game Over flow. Real multi-phase boss is 5.2 |
+| Item Spawner | ✅ Done (system) | `RoomItemSpawner` + `RoomData.ItemPickupPrefab` — spawns one weapon/modifier on room activate. **No item room content authored yet** |
+| Boss Room (placeholder) | ✅ Done (system) | `RoomType.Boss` reuses the same `RoomEnemySpawner`; clearing it ends the run via the Game Over flow. **No boss room content authored yet**; the real multi-phase boss is 5.2 |
 
 ---
 
@@ -912,13 +949,9 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 
 | Gap | Category | Priority | Roadmap |
 |-----|----------|----------|---------|
-| **Room system** — rooms, doors, lock/clear | Core | 🔴 High | 3.1–3.3 ✅, 3.7–3.9 ✅ |
-| **Map structure** — room sequence + transitions | Core | 🔴 High | 3.4–3.5 ✅ |
-| **Enemy types** — Chaser, Shooter, Rusher, Robber, Tank | Core | 🔴 High | 4.2–4.5, 7.3 |
+| **Enemy types** — Melee, Shooter, Robber (Phase 4); Rusher, Floater, Tank, Support (later) | Core | 🔴 High | 4.2–4.4, 7.3 |
 | **Boss** — multi-phase enemy | Core | 🔴 High | 5.2–5.5 |
-| **Room tilemap** — walls, floor, door sockets | Visual | 🔴 High | 3.6, 6.3 |
 | **Modifier HUD** — active modifiers + duration | UI | 🟡 Medium | 6.9 |
-| **Door sprites** | Visual | 🟡 Medium | — |
 | **Animations** — idle / walk / attack / death | Visual | 🟡 Medium | 6.2 |
 | **Particle effects** — blood, sparks, bursts | Visual | 🟡 Medium | 6.7 |
 | **Screen shake** | Visual | 🟡 Medium | 2.8 |
@@ -979,24 +1012,22 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | 3.3 | **RoomDoor** ✅ | Collider2D trigger. Locks on room enter, unlocks on room clear. | 3.2 |
 | 3.4 | **Map Structure** ✅ | Linear room sequence: Start → Combat → Item → Combat → ... → Boss. `MapData`/`MapRoomEntry`/`RoomDoorLink` + editor `Map_Test`. | 3.1, 3.2 |
 | 3.5 | **Room Transitions** ✅ | Player enters door → fade → swap room → teleport → camera frame. `DungeonManager`/`RoomCamera`/`RoomTransitionOverlay`. | 3.4, 1.4 |
-| 3.6 | **Room Tilemap** | Base room template: walls, floor, door sockets. 16×16 tileset. | 3.1 |
 | 3.7 | **Combat Room** ✅ | Spawns enemies (once) on enter. Clears when all enemies dead. `RoomEnemySpawner`. | 3.2, 2.1 |
-| 3.8 | **Item Room** ✅ | Contains a weapon or modifier pickup. No enemies. `RoomItemSpawner` + `RoomData.ItemPickupPrefab`. | 3.2 |
-| 3.9 | **Start Room** ✅ | Entry point. No enemies, no pickups. `Room_Start` + `StartRoom`. | 3.2 |
+| 3.8 | **Item Room** 🚧 | The spawner (`RoomItemSpawner` + `RoomData.ItemPickupPrefab`) is implemented; **no item room prefab/data is authored yet**. | 3.2 |
+| 3.9 | **Start Room** ✅ | Entry point. No enemies, no pickups. `Rooms/Start/Room_Start_1_N` prefab + data. | 3.2 |
 | 3.10 | **Backtracking** ✅ | Revisit cleared rooms; room state persists (dead enemies stay dead, dropped items stay). | 3.5 |
 
 ### Phase 4: Enemy Variety (🟡 Important)
 
 > Different enemies create emergent gameplay.
 
-| # | Task | Description | Depends On |
-|---|------|-------------|------------|
-| 4.1 | **EnemyData (SO)** | Per-type stats: speed, HP, damage, attack pattern, sprite. | — |
-| 4.2 | **Chaser Enemy** | Moves toward player. Contact damage. Melee only. | 2.1 |
-| 4.3 | **Shooter Enemy** | Maintains distance. Fires projectiles at player. | 2.1, 1.1 |
-| 4.4 | **Rusher Enemy** | Telegraphs, then charges in a line. Melee only. Brief stun after. | 2.1 |
-| 4.5 | **Robber Enemy** | Steals player weapon if equipped, flees, then shoots. Hides if player unarmed. | 2.1, 1.1 |
-| 4.6 | **Enemy Spawner** ✅ | Room-level spawner. Spawns enemies from `RoomData` definitions. | 3.7 |
+| #   | Task | Description                                                                    | Depends On |
+|-----|------|--------------------------------------------------------------------------------|------------|
+| 4.1 | **EnemyData (SO)** 🚧 | Per-type stats: speed, HP, attack range, sprite. Code done (`EnemyData` + `EnemyDataApplier`); `EnemyData_Melee` asset pending. | — |
+| 4.2 | **Melee Enemy** 🚧 | Only equips melee weapons. Always closes distance to the player and strikes at reach. First per-type behavior (`MeleeBehavior`). Code done; `MeleeEnemy` prefab pending. | 4.1, 2.1 |
+| 4.3 | **Shooter Enemy** | Maintains distance. Fires projectiles at player. | 4.1, 2.1, 1.1 |
+| 4.4 | **Robber Enemy** | Steals player weapon if equipped, flees, then shoots. Hides if player unarmed. | 4.1, 2.1, 1.1 |
+| 4.5 | **Enemy Spawner** ✅ | Room-level spawner. Spawns enemies from `RoomData` definitions. | 3.7 |
 
 ### Phase 5: Boss & Progression (🟡 Important)
 
@@ -1017,7 +1048,6 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 |---|------|-------------|------------|
 | 6.1 | **Placeholder Sprites** | Replace colored squares with temp pixel art for all entities. | — |
 | 6.2 | **Sprite Animations** | Idle, walk, attack, death for player, enemies, boss. | 6.1 |
-| 6.3 | **Room Tileset** | 16×16 tileset: walls, floors, doors, decorations. | 3.6 |
 | 6.4 | **Music** | BGM per state: menu, combat, boss, item room. | 1.8 |
 | 6.5 | **Enemy SFX** | Attack, death, and ambient sounds per enemy type. | 1.8, 4.2-4.4 |
 | 6.6 | **Boss SFX** | Entrance, phase transition, death sounds. | 1.8, 5.2 |
@@ -1035,10 +1065,10 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | 7.1 | **More Weapon Types** | New fire strategies: beam, shotgun, launcher, thrown. | 1.1 |
 | 7.2 | **More Modifiers** | New stat and weapon fire modifiers. | — |
 | 7.3 | **More Enemy Types** | Floater, Tank, Support, etc. | 4.1 |
-| 7.4 | **Room Templates** | More room layouts for variety. | 3.6 |
+| 7.4 | **Room Templates** | More room layouts for variety. | 3.1 |
 | 7.5 | **Procedural Generation** | `RoomGenerator` picks from template pool, connects valid graphs. | 3.4 |
 | 7.6 | **Meta-progression** | Persistent upgrades across runs. | 1.3 |
-| 7.7 | **Shop System** | Spend currency on weapons/modifiers between rooms. | 4.6 |
+| 7.7 | **Shop System** | Spend currency on weapons/modifiers between rooms. | 4.5 |
 | 7.8 | **Challenge Runs** | Difficulty modifiers (more enemies, less HP, harder bosses). | 7.6 |
 
 ---
@@ -1052,8 +1082,8 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | **Weapons** | Pistol, Colt, Mosin, Katana |
 | **Fire Strategies** | Melee, Projectile |
 | **Modifiers** | DoubleDamage, DoubleFireRate, DoubleReload, DoubleSpeed, DoubleShot |
-| **Rooms** | `Data/Rooms/CombatRoom_01`, `Data/Rooms/StartRoom` (BossRoom + ItemRoom in 3C) |
-| **Maps** | `Data/Maps/Map_Test` (3B, editor-created) |
+| **Rooms** | `Data/Rooms/Combat/Room_Combat_1_ES`, `Data/Rooms/Start/Room_Start_1_N` (Item + Boss rooms not authored yet) |
+| **Maps** | `Data/Maps/Map_Test` — 2 entries: Start → Combat |
 
 ### Audio
 
@@ -1077,7 +1107,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | `Assets/Sprites/Modifiers/*.png` | One 16×16 icon per modifier (DoubleDamage, DoubleFireRate, DoubleReload, DoubleShot, DoubleSpeed) |
 | `Assets/Sprites/Effects/MuzzleFlash.png` | Weapon VFX — sprite 14×16 px (16×16 canvas) |
 
-> **Planned sprites** — per-enemy-type art (Chaser 32×32, Shooter/Rusher 32×32, Tank 48×48, Boss 64×64) and a dedicated bullet sprite (the projectile currently uses a built-in placeholder). Canvas sizes in [§1 → Sprite Canvas Specs](#visual-specs); all at 16 PPU, Point filter, no compression.
+> **Planned sprites** — per-enemy-type art (Melee/Shooter/Rusher 32×32, Tank 48×48, Boss 64×64) and a dedicated bullet sprite (the projectile currently uses a built-in placeholder). Canvas sizes in [§1 → Sprite Canvas Specs](#visual-specs); all at 16 PPU, Point filter, no compression.
 
 ### Prefabs
 

@@ -27,16 +27,28 @@ namespace Components.Rooms
             if (_blocker == null)
                 throw new MissingReferenceException($"{name} is missing a blocker collider.");
             
-            _spriteRenderer = GetComponent<SpriteRenderer>();
-            
-            if (!IsLocked && !_manualLockDoor)
-                _spriteRenderer.sprite = _doorUnlockedSprite;
+            CheckSpriteState();
         }
 
         private void OnValidate()
         {
+            CheckSpriteState();
+        }
+
+        private void CheckSpriteState()
+        {
             _spriteRenderer = GetComponent<SpriteRenderer>();
-            _spriteRenderer.sprite = _manualLockDoor ? _doorLockedSprite : _doorClosedSprite;
+            if (_manualLockDoor)
+            {
+                _spriteRenderer.sprite = _doorLockedSprite;
+                return;
+            }
+            if (!IsLocked && !_manualLockDoor)
+            {
+                _spriteRenderer.sprite = _doorUnlockedSprite;
+                return;
+            }
+            _spriteRenderer.sprite = _doorClosedSprite;
         }
 
         public void Lock()
@@ -46,6 +58,9 @@ namespace Components.Rooms
 
             IsLocked = true;
             _blocker.enabled = true;
+            
+            if (!_manualLockDoor)
+                _spriteRenderer.sprite = _doorClosedSprite;
         }
 
         public void Unlock()

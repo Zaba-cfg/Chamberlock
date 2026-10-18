@@ -80,6 +80,13 @@ namespace Components.EnemyComponents.EnemyBehaviorRelated
                 CurrentState = EnemyState.SeekingWeapon;
                 return;
             }
+
+            if (!CanAcceptWeapon(_weaponHolder.CurrentWeapon))
+            {
+                _weaponHolder.DropCurrentWeapon();
+                CurrentState = EnemyState.SeekingWeapon;
+                return;
+            }
         
             if (_combat.CanAttack())
             {
@@ -90,7 +97,7 @@ namespace Components.EnemyComponents.EnemyBehaviorRelated
     
         private void HandleSeekingWeapon()
         {
-            Weapon weapon = _weaponDecision.GetClosestAvailableWeapon();
+            Weapon weapon = _weaponDecision.GetClosestAvailableWeapon(CanAcceptWeapon);
 
             if (weapon == null)
             {
@@ -104,7 +111,7 @@ namespace Components.EnemyComponents.EnemyBehaviorRelated
             if (!_weaponDecision.IsWeaponInPickupRange(weapon))
                 return;
 
-            if (_weaponDecision.TryEquipNearbyWeapon())
+            if (_weaponDecision.TryEquipNearbyWeapon(CanAcceptWeapon))
             {
                 CurrentState = EnemyState.Chasing;
             }
@@ -127,6 +134,13 @@ namespace Components.EnemyComponents.EnemyBehaviorRelated
                 return;
             }
 
+            if (!CanAcceptWeapon(weapon))
+            {
+                _weaponHolder.DropCurrentWeapon();
+                CurrentState = EnemyState.SeekingWeapon;
+                return;
+            }
+
             _lookDirection.SetDirection(_target.position - transform.position);
 
             if (!_combat.CanAttack())
@@ -142,6 +156,11 @@ namespace Components.EnemyComponents.EnemyBehaviorRelated
             }
 
             _combat.Attack(_lookDirection.Forward);
+        }
+
+        protected virtual bool CanAcceptWeapon(Weapon weapon)
+        {
+            return true;
         }
     }
 }

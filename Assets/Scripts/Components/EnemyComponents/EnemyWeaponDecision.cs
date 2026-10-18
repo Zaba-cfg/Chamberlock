@@ -1,3 +1,4 @@
+using System;
 using Components.Base.Weapon;
 using Components.Weapons;
 using UnityEngine;
@@ -20,12 +21,12 @@ namespace Components.EnemyComponents
             _weaponHolder = GetComponent<WeaponHolder>();
         }
 
-        public bool TryEquipNearbyWeapon()
+        public bool TryEquipNearbyWeapon(Func<Weapon, bool> filter = null)
         {
             if (_weaponHolder.HasWeapon)
                 return false;
 
-            Weapon weapon = GetClosestAvailableWeapon();
+            Weapon weapon = GetClosestAvailableWeapon(filter);
 
             if (weapon == null)
                 return false;
@@ -34,7 +35,7 @@ namespace Components.EnemyComponents
             return true;
         }
 
-        public Weapon GetClosestAvailableWeapon()
+        public Weapon GetClosestAvailableWeapon(Func<Weapon, bool> filter = null)
         {
             Weapon closestWeapon = null;
             float closestDistance = float.MaxValue;
@@ -45,6 +46,9 @@ namespace Components.EnemyComponents
                     continue;
 
                 if (weapon.IsEmpty)
+                    continue;
+
+                if (filter != null && !filter(weapon))
                     continue;
 
                 float distance = (weapon.transform.position - transform.position).sqrMagnitude;
