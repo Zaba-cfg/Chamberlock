@@ -78,9 +78,9 @@ namespace UI.Menus
 
         private void Show()
         {
-            _timeText.text = FormatTime(RunManager.Instance.ElapsedTime);
-            _killsText.text = RunManager.Instance.Kills.ToString();
-            _roomsText.text = RunManager.Instance.RoomsCleared.ToString();
+            _timeText.text = $"Total time: {FormatTime(RunManager.Instance.ElapsedTime)}";
+            _killsText.text = $"Total kills: {RunManager.Instance.Kills.ToString()}";
+            _roomsText.text = $"Rooms cleared: {RunManager.Instance.RoomsCleared.ToString()}";
 
             _panel.SetActive(true);
         }

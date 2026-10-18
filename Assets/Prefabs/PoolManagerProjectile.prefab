@@ -46,4 +46,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Systems.Pool.PoolManager
   _pools:
   - _prefab: {fileID: 2056187223729286157, guid: 0afb60f82b518ed4a9acb739eb7f74b6, type: 3}
-    _prewarm: 50
+    _prewarm: 100
