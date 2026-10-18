@@ -24,18 +24,45 @@ namespace Components.Rooms
         {
             _room.RoomActivated -= HandleRoomActivated;
         }
+        
+        public GameObject ChooseRandom()
+        {
+            List<GameObject> validOptions = new();
+
+            foreach (GameObject option in _room.Data.ItemPickupPrefab)
+            {
+                if (option != null)
+                    validOptions.Add(option);
+            }
+
+            if (validOptions.Count == 0)
+            {
+                UnityEngine.Debug.LogWarning("No hay prefabs disponibles para elegir.", this);
+                return null;
+            }
+
+            int randomIndex = Random.Range(0, validOptions.Count);
+
+            return validOptions[randomIndex];
+        }
 
         private void HandleRoomActivated()
         {
-            GameObject prefab = _room.Data.ItemPickupPrefab;
+            if (_spawnPoints.Length == 0)
+                throw new MissingReferenceException(
+                    $"{name}: no RoomSpawnPoint with Kind = Item was found.");
+
+            GameObject prefab = ChooseRandom();
 
             if (prefab == null)
                 return;
 
-            if (_spawnPoints.Length == 0)
-                throw new MissingReferenceException($"{name}: no RoomSpawnPoint with Kind = Item was found.");
-
-            Instantiate(prefab, _spawnPoints[0].transform.position, Quaternion.identity, transform);
+            Instantiate(
+                prefab,
+                _spawnPoints[0].transform.position,
+                Quaternion.identity,
+                transform
+            );
         }
 
         private RoomSpawnPoint[] CollectSpawnPoints()

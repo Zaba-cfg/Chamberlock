@@ -10,13 +10,14 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 438c9fd6bf893b04cbe398f954659973, type: 3}
-  m_Name: Room_Combat_1_ES
+  m_Name: Room_Combat_2Robbers2Shooter
   m_EditorClassIdentifier: Assembly-CSharp::Components.Rooms.RoomData
   _roomType: 1
   _dimensions: {x: 20, y: 10}
   _enemies:
-  - _enemyPrefab: {fileID: 3541301891820628173, guid: 5b1a958b0d3fa6748b6ed19819612fd1, type: 3}
-    _count: 1
   - _enemyPrefab: {fileID: 5256291063034213879, guid: 65b38c55c79eb5241a6c13fd968ac9ca, type: 3}
-    _count: 1
-  _itemPickupPrefab: {fileID: 0}
+    _count: 2
+  - _enemyPrefab: {fileID: 6427517618222369327, guid: d856dc00c552f8f42adf5d697c103a93, type: 3}
+    _count: 2
+  _itemPickupPrefab:
+  - {fileID: 0}
