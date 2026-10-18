@@ -52,6 +52,22 @@ PrefabInstance:
       propertyPath: m_Name
       value: RobberEnemy
       objectReference: {fileID: 0}
+    - target: {fileID: 4212161622120142297, guid: 4ff166974f9a6f24b98e3f8d16b90577, type: 3}
+      propertyPath: m_Size.x
+      value: 1.125
+      objectReference: {fileID: 0}
+    - target: {fileID: 4212161622120142297, guid: 4ff166974f9a6f24b98e3f8d16b90577, type: 3}
+      propertyPath: m_Size.y
+      value: 1.625
+      objectReference: {fileID: 0}
+    - target: {fileID: 4212161622120142297, guid: 4ff166974f9a6f24b98e3f8d16b90577, type: 3}
+      propertyPath: m_Sprite
+      value: 
+      objectReference: {fileID: 4750829665347472847, guid: 3960d393e62d58d4dacbea55c641d316, type: 3}
+    - target: {fileID: 4212161622120142297, guid: 4ff166974f9a6f24b98e3f8d16b90577, type: 3}
+      propertyPath: m_WasSpriteAssigned
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents:
     - {fileID: 2957446940397512925, guid: 4ff166974f9a6f24b98e3f8d16b90577, type: 3}
     - {fileID: 1620615534615324033, guid: 4ff166974f9a6f24b98e3f8d16b90577, type: 3}
