@@ -25,7 +25,7 @@ Transform:
   m_GameObject: {fileID: 1971351046853262438}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.5, y: 0.6, z: 0}
+  m_LocalPosition: {x: 0.7999997, y: 0.100000024, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -62,6 +62,7 @@ GameObject:
   - component: {fileID: -6472569565185535112}
   - component: {fileID: 1620615534615324033}
   - component: {fileID: 8678875589677528568}
+  - component: {fileID: 7982409572131499966}
   m_Layer: 0
   m_Name: Enemy
   m_TagString: Untagged
@@ -134,7 +135,7 @@ CircleCollider2D:
   m_Enabled: 1
   serializedVersion: 3
   m_Density: 1
-  m_Material: {fileID: 0}
+  m_Material: {fileID: 6200000, guid: 545b99829d3fe864f9fc710b16dba9e6, type: 2}
   m_IncludeLayers:
     serializedVersion: 2
     m_Bits: 0
@@ -209,12 +210,12 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 2
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 8596640243658272642, guid: fa6b811fa14a77444806c8bde07f1000, type: 3}
+  m_Sprite: {fileID: -2207236230058056998, guid: c7af403f9ae527b4aa0029237fdf5a6a, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
-  m_Size: {x: 1, y: 1}
+  m_Size: {x: 1.125, y: 1.625}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1
@@ -231,6 +232,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ec004fdc8f95f324db3d59678a881c32, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EnemyAIInput
+  _retreatSpeedMultiplier: 1
 --- !u!114 &7274062944285148975
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -296,6 +298,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyCombat
   _target: {fileID: 0}
   _attackRange: 5
+  _requireLineOfSight: 1
 --- !u!114 &5610948257959644489
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -556,3 +559,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6f3be75c2aa70ae4fb7733bd77beec39, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Components.Rooms.RoomEnemy
+--- !u!114 &7982409572131499966
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2976969469855400215}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b6f24682b21772e4e8d2c3d1c5b04d9b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Components.EnemyComponents.ObstacleAvoidance
+  _checkDistance: 1.5
+  _whiskerAngle: 60

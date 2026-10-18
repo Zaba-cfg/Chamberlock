@@ -12,9 +12,11 @@ namespace Components.EnemyComponents
 
         private bool _retreating;
         private bool _moveEnabled = true;
+        private ObstacleAvoidance _obstacleAvoidance;
 
         private void Awake()
         {
+            _obstacleAvoidance = GetComponent<ObstacleAvoidance>();
             //if (Target == null) throw new MissingReferenceException($"{name} is missing a target.");
         }
 
@@ -33,6 +35,9 @@ namespace Components.EnemyComponents
 
             if (_retreating)
                 direction = -direction * _retreatSpeedMultiplier;
+
+            if (_obstacleAvoidance != null)
+                direction = _obstacleAvoidance.AdjustDirection(direction);
 
             MoveInput = direction;
         }

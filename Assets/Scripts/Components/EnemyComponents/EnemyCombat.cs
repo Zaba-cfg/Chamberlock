@@ -9,6 +9,7 @@ namespace Components.EnemyComponents
     {
         [SerializeField] private Transform _target;
         [SerializeField] private float _attackRange = 5f;
+        [SerializeField] private bool _requireLineOfSight = true;
 
         public Transform Target => _target;
 
@@ -37,9 +38,16 @@ namespace Components.EnemyComponents
 
         public bool CanAttack()
         {
-            float distanceSquared = (_target.position - transform.position).sqrMagnitude;
+            Vector2 toTarget = _target.position - transform.position;
+            float distance = toTarget.magnitude;
 
-            return distanceSquared <= _attackRange * _attackRange;
+            if (distance > _attackRange)
+                return false;
+
+            if (_requireLineOfSight && distance > 0f && !ObstacleRaycast.IsPathClear(transform.position, toTarget / distance, distance))
+                return false;
+
+            return true;
         }
 
         public void Attack(Vector2 direction)

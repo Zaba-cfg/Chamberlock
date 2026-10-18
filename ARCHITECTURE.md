@@ -485,7 +485,7 @@ result = baseValue
 
 ### 4.10 Enemy AI System
 
-**Files**: `EnemyAIInput.cs`, `EnemyCombat.cs`, `EnemyWeaponDecision.cs`, `EnemyBehavior.cs`, `EnemyState.cs`
+**Files**: `EnemyAIInput.cs`, `EnemyCombat.cs`, `EnemyWeaponDecision.cs`, `EnemyBehavior.cs`, `EnemyState.cs`, `ObstacleAvoidance.cs`, `ObstacleRaycast.cs`
 
 #### Baseline FSM (3 states)
 ```
@@ -507,9 +507,16 @@ Attacking ────► SeekingWeapon (weapon empty / dropped)
 
 | Component | Role |
 |-----------|------|
-| `EnemyAIInput` | Implements `IMoveInput` — direction toward `Target`, invertible via `SetRetreating(bool)` (scaled by `_retreatSpeedMultiplier`) and haltable via `SetMoveEnabled(bool)` |
-| `EnemyCombat` | Range check (`Vector2.Distance`), calls `WeaponHolder.TryFire` |
+| `EnemyAIInput` | Implements `IMoveInput` — direction toward `Target`, invertible via `SetRetreating(bool)` (scaled by `_retreatSpeedMultiplier`) and haltable via `SetMoveEnabled(bool)`; passes the final direction (after retreat inversion) through `ObstacleAvoidance` when present |
+| `EnemyCombat` | `CanAttack()` = range check **and** line-of-sight (`ObstacleRaycast.IsPathClear`, toggleable via `_requireLineOfSight`); calls `WeaponHolder.TryFire` |
 | `EnemyWeaponDecision` | `GetClosestAvailableWeapon(filter)` / `IsWeaponInPickupRange()` / `TryEquipNearbyWeapon(filter)` — optional `Func<Weapon, bool>` filter so types can restrict pickups |
+| `ObstacleAvoidance` | Whisker steering: direct ray blocked → casts ±`_whiskerAngle` whiskers over `_checkDistance` → takes the freer side (remembered to prevent jitter); dead-end → 90° turn along the wall. Added on the base `Enemy` prefab |
+| `ObstacleRaycast` | Static `IsPathClear(origin, direction, distance)` — `RaycastNonAlloc` with a shared buffer; skips trigger colliders and anything with `Health`, so only walls/props block (no Layer setup required) |
+
+#### Navigation & line-of-sight
+- **Wall avoidance**: `EnemyAIInput` post-processes its move direction with `ObstacleAvoidance`, so chasing, retreating, fleeing, and weapon-seeking all route around obstacles instead of welding to them.
+- **LOS gating**: `EnemyCombat.CanAttack()` also requires a clear ray to the target — enemies never fire through walls (melee swings included). Breaking LOS drops the FSM back to `Chasing`, so avoidance takes over until the enemy re-acquires the player.
+- Allies don't block LOS (they have `Health`), matching projectile behavior.
 
 #### Dispatch & per-type states
 - `Update()` → `protected virtual HandleState(EnemyState)` — a switch that dispatches the 3 baseline states to `protected virtual` handlers (`HandleChasing`, `HandleSeekingWeapon`, `HandleAttacking`); subclasses override `HandleState` to add states and override individual handlers to modify rules (Template Method).
@@ -518,7 +525,7 @@ Attacking ────► SeekingWeapon (weapon empty / dropped)
 - The weapon-acceptance hook `protected virtual bool CanAcceptWeapon(Weapon)` defaults to `true` (baseline `Enemy`); `MeleeBehavior` / `ShooterBehavior` narrow it.
 - Baseline `Enemy` behavior is unchanged by all of the above — it runs exactly the diagram in this section.
 
-**Status**: ✅ Complete (baseline FSM + per-type extension points; per-type behaviors in §4.15)
+**Status**: ✅ Complete (baseline FSM + per-type extension points; per-type behaviors in §4.15) — navigation add-on (`ObstacleAvoidance` + LOS gating) 🚧 pending Play-mode verification
 
 ---
 
@@ -950,6 +957,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | **Object pooling from start** | Avoids GC spikes — projectiles are pooled and reused instead of instantiated/destroyed; enemies/pickups can register later |
 | **Audio via mixer groups** | Music and SFX route to `AudioMixer` groups — one place controls each category's volume; `GameSettings` feeds it in decibels |
 | **Enemy types via composition** | Each enemy type is a `MonoBehaviour` composing or extending base FSM — not a monolithic class |
+| **Raycast steering, no nav asset** | `ObstacleAvoidance` whiskers + `ObstacleRaycast` LOS gating — ~100 lines solves wall-welding and shoot-through-walls for hand-crafted rooms; A* would be overkill until rooms become maze-like |
 | **Boss as room event** | Boss is a special room type, not a separate scene — keeps state consistent |
 
 ---
