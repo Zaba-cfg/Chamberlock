@@ -1,7 +1,7 @@
-# Project-Roguelike — Architecture & Roadmap
+# Chamberlock — Architecture & Roadmap
 
 > **Document State**: Alive roadmap — updated during development.
-> **Last Updated**: 2026-10-16
+> **Last Updated**: 2026-10-18
 
 ---
 
@@ -47,6 +47,7 @@
 
 | Field | Value |
 |-------|-------|
+| **Name** | Chamberlock |
 | **Engine** | Unity 6.3 LTS (6000.3.11f1) |
 | **Template** | Universal 2D |
 | **Render Pipeline** | URP 17.3.0 — 2D Renderer |
@@ -228,6 +229,7 @@ Scripts/
 │   │   ├── WeaponFireModifierDefinition.cs
 │   │   ├── WeaponFireContext.cs, WeaponFireResult.cs
 │   │   ├── WeaponAmmoType.cs
+│   │   ├── WeaponModifierLoadout.cs
 │   │   └── WeaponAudioFeedback.cs, WeaponVisualFeedback.cs
 │   ├── Modifiers/       # Stat modifier pipeline
 │   │   ├── ModifierDefinition.cs (abstract), StatModifierDefinition.cs
@@ -240,6 +242,7 @@ Scripts/
 │   │   ├── EnemyKillCounter.cs, EnemyTargetAssigner.cs
 │   │   ├── EnemyData.cs (ScriptableObject), EnemyDataApplier.cs
 │   │   ├── EnemyStartingWeapon.cs
+│   │   ├── ObstacleAvoidance.cs, ObstacleRaycast.cs
 │   │   ├── EnemyBehaviorRelated/  # EnemyBehavior.cs (base), EnemyState.cs, MeleeBehavior.cs, ShooterBehavior.cs, RobberBehavior.cs
 │   │   └── (planned) ShooterBehavior, RobberBehavior, BossBehavior, BossPhase
 │   ├── Player/          # Player-specific components
@@ -334,7 +337,7 @@ Scripts/
 
 ### 4.4 Weapon System
 
-**Core Files**: `Weapon.cs`, `WeaponHolder.cs`, `WeaponData.cs`, `WeaponFireStrategy.cs`, `WeaponFireModifierDefinition.cs`, `WeaponFireContext.cs`, `WeaponFireResult.cs`, `WeaponAmmoType.cs`
+**Core Files**: `Weapon.cs`, `WeaponHolder.cs`, `WeaponData.cs`, `WeaponFireStrategy.cs`, `WeaponFireModifierDefinition.cs`, `WeaponFireContext.cs`, `WeaponFireResult.cs`, `WeaponAmmoType.cs`, `WeaponModifierLoadout.cs`
 
 #### Data Layer (`WeaponData` ScriptableObject)
 | Property | Type | Description |
@@ -353,6 +356,8 @@ Scripts/
 - `TryFire()` returns `WeaponFireResult` enum (Success, NotEquipped, Cooldown, NoAmmo, Reloading)
 - Applies `WeaponFireModifierDefinition` modifiers to `WeaponFireContext` before strategy execution
 - Calculates modified stats (Damage, FireRate, ReloadDuration) via `ModifierCalculator` with weapon + holder providers
+- `AddModifier()` / `AddTemporaryModifier()` — writes into the weapon's own `ModifierInventory` (weapon-scoped, see §4.6)
+- `WeaponModifierLoadout` — optional component: applies a predefined `ModifierDefinition[]` on spawn, so prefab variants can define pre-modded weapons (e.g. Double Shot Pistol)
 - Tracks ammo, cooldowns via `Time.time`
 
 #### Weapon Holder (`WeaponHolder`)
@@ -426,12 +431,17 @@ result = baseValue
 #### Modifier Pickups
 | Prefab | Behavior |
 |--------|----------|
-| `ModifierPickup` | `IInteractable` → adds permanent modifier → destroys self |
+| `ModifierPickup` | `IInteractable` → adds permanent modifier to the owner's inventory → destroys self |
 | `TemporaryModifierPickup` | `IInteractable` → adds temporary modifier with duration → destroys self |
+
+#### Weapon-Scoped Modifiers
+- `Weapon.AddModifier()` / `Weapon.AddTemporaryModifier()` — write into the weapon's own `ModifierInventory` (the missing write path; the read path in `Weapon` already consumed it).
+- `WeaponModifierLoadout` component (§4.4): applies a predefined `ModifierDefinition[]` on spawn — a pre-modded weapon is just a **prefab variant** with this component; any spawner that instantiates the prefab gets the mods for free.
+- Two scopes are merged at read time: **weapon inventory + holder (owner) inventory** — owner mods (pickups) affect every weapon held, weapon mods (loadout) affect only that weapon and travel with the weapon object when dropped.
 
 > Each modifier shows its matching **16×16 icon** from `Assets/Sprites/Modifiers` (see §1 → Sprite Canvas Specs — Weapons, Pickups & Projectiles). The pickup objects are authored directly in `SampleScene` (there are no pickup prefabs yet).
 
-**Status**: ✅ Complete
+**Status**: ✅ Complete (weapon-scoped loadout `WeaponModifierLoadout` verified)
 
 ---
 
@@ -525,7 +535,7 @@ Attacking ────► SeekingWeapon (weapon empty / dropped)
 - The weapon-acceptance hook `protected virtual bool CanAcceptWeapon(Weapon)` defaults to `true` (baseline `Enemy`); `MeleeBehavior` / `ShooterBehavior` narrow it.
 - Baseline `Enemy` behavior is unchanged by all of the above — it runs exactly the diagram in this section.
 
-**Status**: ✅ Complete (baseline FSM + per-type extension points; per-type behaviors in §4.15) — navigation add-on (`ObstacleAvoidance` + LOS gating) 🚧 pending Play-mode verification
+**Status**: ✅ Complete (baseline FSM + per-type extension points; per-type behaviors in §4.15; navigation add-on `ObstacleAvoidance` + LOS gating verified)
 
 ---
 

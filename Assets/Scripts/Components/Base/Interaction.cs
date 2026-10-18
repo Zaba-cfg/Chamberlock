@@ -9,13 +9,16 @@ namespace Components.Base
     public class Interaction : MonoBehaviour
     {
         [SerializeField] private float _interactionRadius = 1.5f;
+        [SerializeField] private AudioClip _interactClip;
     
         private readonly List<IInteractable> _interactables = new();
     
         private CircleCollider2D _circleCollider;
+        private AudioSource _audioSource;
 
         private void Awake()
         {
+            _audioSource = GetComponent<AudioSource>();
             _circleCollider = GetComponent<CircleCollider2D>();
             _circleCollider.isTrigger = true;
             _circleCollider.radius = _interactionRadius;
@@ -41,6 +44,9 @@ namespace Components.Base
                 }
             }
             closest?.Interact(gameObject);
+            
+            if (_interactClip != null)
+                _audioSource.PlayOneShot(_interactClip);
         }
 
         private void OnTriggerEnter2D(Collider2D collision)

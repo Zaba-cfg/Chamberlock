@@ -211,7 +211,7 @@ SpriteRenderer:
   m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 0
+  m_SortingOrder: 1
   m_MaskInteraction: 0
   m_Sprite: {fileID: 4089796923838250065, guid: 7d9bdb678ebb85f4f96a16c83c0b188a, type: 3}
   m_Color: {r: 0.990566, g: 0.990566, b: 0.990566, a: 1}
@@ -298,6 +298,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Interaction
   _interactionRadius: 1.5
+  _interactClip: {fileID: 0}
 --- !u!114 &561586797451192487
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -419,7 +420,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0e80680d6762442abfa9b78c3e32018c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Components.Weapons.WeaponAudioFeedback
-  _fireClip: {fileID: 8300000, guid: 60ed1b79d71a70744bde29fd3cc6e8ec, type: 3}
+  _fireClip: {fileID: 8300000, guid: a6d69871146474e418e2b9acaaf4ca68, type: 3}
   _reloadStartClip: {fileID: 8300000, guid: 2fe9c391828d1a04483398f7042a8cb0, type: 3}
   _reloadCompleteClip: {fileID: 8300000, guid: fd84a9e070f092a4b9ef4c32f0784748, type: 3}
 --- !u!114 &2730963972345857296
@@ -435,4 +436,5 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Components.Weapons.WeaponVisualFeedback
   _muzzleFlash: {fileID: 2410844269049428445}
+  _sprite: {fileID: -7310501140982945409, guid: 6845f457d42f86448933179be300a8a0, type: 3}
   _flashDuration: 0.05

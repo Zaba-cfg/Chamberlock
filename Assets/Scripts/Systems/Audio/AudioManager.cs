@@ -78,8 +78,7 @@ namespace Systems.Audio
             _musicSource.Stop();
             _musicSource.clip = null;
         }
-
-        /// Fires a one-shot on the SFX layer. Several can overlap on the shared source.
+        
         public void PlaySfx(AudioClip clip, float volumeScale = 1f)
         {
             if (clip == null)

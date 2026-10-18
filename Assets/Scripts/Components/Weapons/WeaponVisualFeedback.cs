@@ -8,8 +8,10 @@ namespace Components.Weapons
     public class WeaponVisualFeedback : MonoBehaviour
     {
         [SerializeField] private GameObject _muzzleFlash;
+        [SerializeField] private Sprite _sprite;
         [SerializeField, Min(0f)] private float _flashDuration = 0.05f;
-
+        
+        private SpriteRenderer _spriteRenderer;
         private Weapon _weapon;
         private Coroutine _muzzleFlashCoroutine;
 
@@ -19,6 +21,9 @@ namespace Components.Weapons
 
             if (_muzzleFlash == null)
                 throw new MissingReferenceException($"{name} is missing a muzzle flash.");
+            
+            _spriteRenderer = _muzzleFlash.GetComponent<SpriteRenderer>();
+            _spriteRenderer.sprite = _sprite;
         }
 
         private void OnWeaponFired()

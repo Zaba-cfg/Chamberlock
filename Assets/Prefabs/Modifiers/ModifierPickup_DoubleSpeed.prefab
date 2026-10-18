@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 453479233163875819}
   - component: {fileID: 2808234619840854661}
   m_Layer: 0
-  m_Name: ModifierPickupDoubleShot
+  m_Name: ModifierPickup_DoubleSpeed
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -82,7 +82,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1d883ded6bb916a41a166b85b0c7f4a0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ModifierPickup
-  _modifier: {fileID: 11400000, guid: 2baea3ee4aa4324468a986f49f472eba, type: 2}
+  _modifier: {fileID: 11400000, guid: 00f02702983eb904d883a1ae962f61ab, type: 2}
 --- !u!212 &2808234619840854661
 SpriteRenderer:
   serializedVersion: 2
@@ -132,7 +132,7 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 3040205253013168821, guid: 0540fb943e9da2842a9e9c721260d301, type: 3}
+  m_Sprite: {fileID: 6335766311746848785, guid: d42505132e8de0442a5ca1853ab32318, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0

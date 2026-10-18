@@ -133,6 +133,16 @@ namespace Components.Weapons
             ReloadCompleted?.Invoke();
         }
     
+        public bool AddModifier(ModifierDefinition definition)
+        {
+            return _modifierInventory.AddModifier(definition);
+        }
+
+        public bool AddTemporaryModifier(ModifierDefinition definition, float duration)
+        {
+            return _modifierInventory.AddTemporaryModifier(definition, duration);
+        }
+
         private float CalculateModifiedValue(float baseValue, ModifierStat stat)
         {
             if (!IsEquipped)

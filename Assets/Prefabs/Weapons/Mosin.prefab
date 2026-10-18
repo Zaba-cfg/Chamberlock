@@ -211,7 +211,7 @@ SpriteRenderer:
   m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 0
+  m_SortingOrder: 1
   m_MaskInteraction: 0
   m_Sprite: {fileID: 6199640236988154992, guid: 44d71792c886a4f4f93bf20785fcf1c8, type: 3}
   m_Color: {r: 0.990566, g: 0.990566, b: 0.990566, a: 1}
@@ -298,6 +298,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Interaction
   _interactionRadius: 1.5
+  _interactClip: {fileID: 0}
 --- !u!114 &561586797451192487
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -435,4 +436,5 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Components.Weapons.WeaponVisualFeedback
   _muzzleFlash: {fileID: 2410844269049428445}
+  _sprite: {fileID: -4214874209979498031, guid: 8bf91aad6ada91b4cabe1c0b890b9595, type: 3}
   _flashDuration: 0.05
