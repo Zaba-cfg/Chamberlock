@@ -47,7 +47,7 @@ namespace Entities.PlayerRelated
             if (!_playerInput.FireHeld)
                 return;
 
-            if (_weaponHolder.CurrentWeapon.CurrentAmmo == 0)
+            if (_weaponHolder.CurrentWeapon.CurrentAmmo == 0 && _weaponHolder != null)
                 _weaponHolder.Reload();
             
             _weaponHolder.TryFire(_lookDirection.Forward);

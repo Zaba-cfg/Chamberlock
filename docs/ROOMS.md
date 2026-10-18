@@ -206,7 +206,7 @@ classDiagram
         Start
         Combat
         Item
-        Boss
+        Final
     }
 
     class DoorDirection {
@@ -506,8 +506,8 @@ classDiagram
     }
 
     RoomController ..> RunManager : AddRoomCleared
-    RoomController ..> RunManager : EndRun (boss room only)
-    RoomController ..> GameManager : SetState GameOver (boss room only)
+    RoomController ..> RunManager : EndRun (Final room only)
+    RoomController ..> GameManager : SetState GameOver (Final room only)
     GameManager ..> GameState : CurrentState
 
     Health ..> RoomEnemy : Died
@@ -533,10 +533,10 @@ classDiagram
 | Trigger | Path |
 |---------|------|
 | Player dies | `Health.Died` → `PlayerDeathHandler` → `RunManager.EndRun()` + `GameManager.SetState(GameOver)` |
-| Boss room cleared | `RoomController.ClearRoom()` → `CompleteRun()` → `RunManager.EndRun()` + `GameManager.SetState(GameOver)` |
+| Final Room cleared | `RoomController.ClearRoom()` → `CompleteRun()` → `RunManager.EndRun()` + `GameManager.SetState(GameOver)` |
 
-Both end on the same `GameOverScreen`, which shows time / kills / rooms and offers Restart or Main
-Menu. The boss path is a placeholder for the dedicated victory screen (roadmap 5.5).
+Both end on the same end-of-run screen, which shows time / kills / rooms and offers Restart or Main
+Menu. The Final Room clear is the win path and reuses this shared presentation (roadmap 5.5).
 
 ---
 
@@ -547,39 +547,35 @@ prefabs, which is why rooms can *find* their collaborators without any serialize
 
 ### 5.1 The current map (`Assets/Data/Maps/Map_Test.asset`)
 
-| # | Position | Data asset | Room prefab | Type | Exit |
-|---|----------|-----------|-------------|------|------|
-| 0 | -12, 0 | `StartRoom` | `Room_Start` | Start | East → 1 |
-| 1 | 12, 0 | `ItemRoom_Colt` | `Room_Item_Colt` | Item | East → 2 |
-| 2 | 36, 0 | `CombatRoom_02` | `Room_Combat2` | Combat | North → 3 |
-| 3 | 60, 0 | `CombatRoom_02` | `Room_Combat2` | Combat | East → 4 |
-| 4 | 84, 0 | `BossRoom` | `Room_Boss` | Boss | — (run ends) |
+The map is mid-rework: the old five-room layout was removed and rooms are being re-authored as
+per-room prefabs. The live map currently holds two rooms:
 
-Rooms are 20 × 11 with walls at `x = ±9`; positions are 24 units apart, so they never overlap.
+| # | Position | Data asset & prefab | Type | Door links |
+|---|----------|---------------------|------|------------|
+| 0 | 0, 0 | `Room_Start_1_N` | Start | North → 1 (arrive South) |
+| 1 | 50, 50 | `Room_Combat_1_ES` | Combat | North → 0 (arrive South) |
 
-### 5.2 Room prefabs
+Rooms are 20 × 10. Prefab/asset names follow `Room_<Type>_<Index>_<Suffix>`; the suffix is not a
+stable contract yet — do not read layout guarantees into it. Neither room is a Final Room, so a run
+on this map currently ends only by player death; Item and Final rooms slot in as they are authored.
+
+### 5.2 Room prefabs (`Assets/Prefabs/Rooms/`)
+
+The map is mid-rework; only two room prefabs exist so far. Both carry the same component set —
+the difference is which spawners are enabled.
 
 ```mermaid
 classDiagram
     direction TB
 
-    class Room_Combat2 {
+    class Room_Start_1_N {
         <<prefab>>
     }
-    class Room_Boss {
-        <<prefab>>
-    }
-    class Room_Item_Colt {
-        <<prefab>>
-    }
-    class Room_Start {
+    class Room_Combat_1_ES {
         <<prefab>>
     }
 
     class RoomController {
-        <<Components.Rooms>>
-    }
-    class RoomDebugger {
         <<Components.Rooms>>
     }
     class RoomEnemySpawner {
@@ -595,34 +591,30 @@ classDiagram
         <<Components.Rooms>>
     }
 
-    Room_Combat2 *-- RoomController
-    Room_Combat2 *-- RoomDebugger
-    Room_Combat2 *-- RoomEnemySpawner
-    Room_Combat2 *-- "4" RoomDoor
-    Room_Combat2 *-- "4" RoomSpawnPoint
+    Room_Start_1_N *-- RoomController
+    Room_Start_1_N *-- RoomEnemySpawner
+    Room_Start_1_N *-- RoomItemSpawner
+    Room_Start_1_N *-- "4" RoomDoor
+    Room_Start_1_N *-- "4" RoomSpawnPoint
 
-    Room_Boss *-- RoomController
-    Room_Boss *-- RoomDebugger
-    Room_Boss *-- RoomEnemySpawner
-    Room_Boss *-- "2" RoomDoor
-    Room_Boss *-- "1" RoomSpawnPoint
+    Room_Combat_1_ES *-- RoomController
+    Room_Combat_1_ES *-- RoomEnemySpawner
+    Room_Combat_1_ES *-- RoomItemSpawner
+    Room_Combat_1_ES *-- "4" RoomDoor
+    Room_Combat_1_ES *-- "4" RoomSpawnPoint
 
-    Room_Item_Colt *-- RoomController
-    Room_Item_Colt *-- RoomDebugger
-    Room_Item_Colt *-- RoomItemSpawner
-    Room_Item_Colt *-- "2" RoomDoor
-    Room_Item_Colt *-- "1" RoomSpawnPoint
-
-    Room_Start *-- RoomController
-    Room_Start *-- RoomDebugger
-    Room_Start *-- "2" RoomDoor
-
-    note for Room_Combat2 "The only prefab with all four doors (N/E/S/W). Every other room has East and West only."
+    note for Room_Start_1_N "Both spawners disabled. Spawn points exist but are unused (all four are Kind = Enemy)."
+    note for Room_Combat_1_ES "Enemy spawner enabled; item spawner disabled. MeleeEnemy x1 + ShooterEnemy x1 come from the RoomData asset, not the prefab. Neither live prefab carries a RoomDebugger, though the component still exists in code."
 ```
 
-### 5.3 A spawned enemy (`Assets/Prefabs/Enemy.prefab`)
+All four `RoomDoor`s exist and are active on both prefabs, but only the doors the map links in
+(`Map_Test` `RoomDoorLink`s) actually go anywhere — see the gotcha in section 9.
 
-Every one of these sits on the same GameObject.
+### 5.3 A spawned enemy (`Assets/Prefabs/Enemies/Enemy.prefab`)
+
+Every one of these sits on the same GameObject. The Phase-4 variants (`MeleeEnemy`, `ShooterEnemy`,
+`RobberEnemy`, same folder) are prefab variants of this base — they add per-type components and data
+but share this composition.
 
 ```mermaid
 classDiagram
@@ -716,7 +708,7 @@ classDiagram
     class Pistol {
         <<weapon prefab>>
     }
-    class ModifierPickupDoubleShot {
+    class ModifierPickup_DoubleShot {
         <<modifier prefab>>
     }
 
@@ -751,7 +743,7 @@ classDiagram
     Pistol *-- WeaponPickup
     Pistol *-- Interaction
 
-    ModifierPickupDoubleShot *-- ModifierPickup
+    ModifierPickup_DoubleShot *-- ModifierPickup
 
     WeaponPickup ..|> IInteractable
     ModifierPickup ..|> IInteractable
@@ -763,9 +755,11 @@ classDiagram
     note for Interaction "The interactor. A CircleCollider2D trigger tracks every IInteractable that enters. Lives on the Player, and is required by WeaponPickup."
 ```
 
-`RoomData.ItemPickupPrefab` accepts either kind — a weapon prefab (`Pistol` / `Mosin` / `Katana` /
-`Colt`) or a prefab carrying `ModifierPickup` / `TemporaryModifierPickup`. There is no compile-time
-distinction, which is why the field is a plain `GameObject`.
+`RoomData.ItemPickupPrefab` accepts either kind — a weapon prefab (anything under
+`Assets/Prefabs/Weapons/`: `Pistol` / `Colt` / `Deagle` / `AK47` / `Mosin` / `Olympia` / `Katana`)
+or a prefab carrying `ModifierPickup` / `TemporaryModifierPickup` (the `ModifierPickup_*` prefabs
+under `Assets/Prefabs/Modifiers/`). There is no compile-time distinction, which is why the field is
+a plain `GameObject`.
 
 ---
 
@@ -785,7 +779,7 @@ sequenceDiagram
 
     P->>RC: OnTriggerEnter2D
     RC->>RC: Activate() — Idle to Active
-    RC->>RD: Lock() (Combat / Boss only)
+    RC->>RD: Lock() (Combat / Final only)
     RC->>DBG: RoomActivated
     RC->>RES: RoomActivated
     RES->>E: Instantiate at Kind == Enemy points
@@ -802,7 +796,7 @@ sequenceDiagram
     RC->>RM: AddRoomCleared()
     RC->>DBG: RoomCleared
 
-    alt RoomType == Boss
+    alt RoomType == Final
         RC->>RM: EndRun()
         RC->>GM: SetState GameOver
         GM-->>P: timeScale 0, GameOverScreen shows
@@ -864,8 +858,8 @@ prefab missing a door that the map link expects.
 | `RoomController` | `RoomEnemySpawner`, `RoomItemSpawner`, `RoomDebugger` | event `RoomActivated` | Player enters |
 | `RoomController` | `RoomDebugger` | event `RoomCleared` | Last enemy removed |
 | `RoomController` | `RunManager` | `AddRoomCleared()` | Every clear |
-| `RoomController` | `RunManager` | `EndRun()` | Boss clear only |
-| `RoomController` | `GameManager` | `SetState(GameOver)` | Boss clear only |
+| `RoomController` | `RunManager` | `EndRun()` | Final Room clear only |
+| `RoomController` | `GameManager` | `SetState(GameOver)` | Final Room clear only |
 | `RoomEnemySpawner` | `RoomEnemy` | `Instantiate` under `_spawnRoot` | On `RoomActivated` |
 | `RoomItemSpawner` | pickup (`IInteractable`) | `Instantiate` under the room | On `RoomActivated` |
 | `RoomEnemy` | `RoomController` | `RegisterEnemy` / `UnregisterEnemy` / `NotifyEnemyDied` | Enable / disable / death |
@@ -896,7 +890,7 @@ correctly regardless of subscriber order. This is the fix for the historical "do
 killing everything" bug, and it is why the room does not depend on `RoomEnemy.HandleDied` firing.
 
 **The empty-combat-room guard.** `Activate()` calls `ClearIfEmpty()` *after* firing `RoomActivated`,
-guarded by `RequiresCombat`. That prevents a Combat or Boss room with zero enemies from locking
+guarded by `RequiresCombat`. That prevents a Combat or Final room with zero enemies from locking
 forever, while never spuriously clearing a Start or Item room.
 
 **`Activate()` must stay idempotent.** Cached rooms are re-activated on every re-entry. It early-returns
@@ -909,9 +903,19 @@ register with the room during `RoomActivated` — before the subsequent `ClearIf
 `RoomController._data` (runtime). Runtime behaviour follows the **prefab's** reference; a mismatch
 between the two is easy to miss.
 
-**Boss = end of run.** `RoomController.CompleteRun()` reuses the Game Over screen (roadmap 5.5 covers
-a dedicated victory screen). If the map ever gains more than one Boss room, this trigger needs to
-become "the final room" rather than "any Boss room".
+**Final Room = end of run.** `RoomController.CompleteRun()` reuses the end-of-run screen (roadmap 5.5
+closed on the shared presentation rather than a separate victory UI). If the map ever gains more
+than one Final room, this trigger needs to become "the final room" rather than "any Final room".
+
+**Unlinked doors are silently inert.** `DungeonManager.HandleDoorEntered()` looks the connection up
+with `TryGetValue`; a door the map doesn't link simply does nothing when entered — no error, no
+transition. Both live prefabs carry all four active `RoomDoor`s even though only the linked ones go
+somewhere, so "walking into a door that does nothing" is usually a missing `RoomDoorLink`, not a
+script bug.
+
+**`Room_Start_1_N.asset` references its own room prefab as `_itemPickupPrefab`.** Almost certainly
+an accidental Inspector drag. It is inert today only because the Start prefab's `RoomItemSpawner` is
+disabled — clear the field before ever enabling that spawner.
 
 **Enemy prefab `m_EditorClassIdentifier` strings are stale hints.** They still read
 `Assembly-CSharp::ModifierController`; the class was renamed to `ModifierInventory`. Binding is by

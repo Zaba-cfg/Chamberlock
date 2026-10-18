@@ -83,7 +83,6 @@
 | **Small enemy** (baseline `Enemy`) | 16×24 px | 32×32 px | 1.0 × 1.5 tiles |
 | **Medium enemy** (Melee, Shooter, Rusher) | 16×24 px | 32×32 px | 1.0 × 1.5 tiles |
 | **Large enemy** (Tank) | 24×32 px | 48×48 px | 1.5 × 2.0 tiles |
-| **Boss** | 48×48 px | 64×64 px | 3.0 × 3.0 tiles |
 
 > Enemy rows are target sizes for the planned roster; the current **Player** and generic **Enemy** sprites are both 18×26 px (see §13).
 
@@ -157,7 +156,7 @@ A **2D top-down roguelite dungeon crawler** inspired by *The Binding of Isaac* a
 Each run follows this cycle:
 
 ```
-Start Room → [Combat Room → Item Room] × N → Boss Room → Victory / Game Over
+Start Room → [Combat Room → Item Room] × N → Final Room → Victory / Game Over
 ```
 
 | Phase | Description |
@@ -166,13 +165,13 @@ Start Room → [Combat Room → Item Room] × N → Boss Room → Victory / Game
 | **2. Combat Room** | Doors lock on entry. Enemies spawn. Clear all enemies to unlock doors and proceed. |
 | **3. Item Room** | Contains a weapon or modifier pickup. No enemies. Choose your reward. |
 | **4. Repeat** | Cycle through combat and item rooms, growing stronger with each clear. |
-| **5. Boss Room** | Final encounter. Multi-phase boss with unique attack patterns. Defeat it to complete the run. |
+| **5. Final Room** | Final encounter: a dense wave of normal enemies. Clear it to complete the run. |
 
 **Between Rooms:** Player chooses which door to enter (branching paths planned for future).
 
 ```
                          ┌─ Combat ─ Item ─┐
-Start ─ Combat ─ Item ──┤                  ├─ Boss
+Start ─ Combat ─ Item ──┤                  ├─ Final
                          └─ Combat ─ Item ─┘
 ```
 
@@ -180,7 +179,7 @@ Start ─ Combat ─ Item ──┤                  ├─ Boss
 
 | Condition | Trigger | Result |
 |-----------|---------|--------|
-| **Win** | Defeat the Boss in the Boss Room | Victory screen → Main Menu → Start a new run |
+| **Win** | Clear the Final Room | Victory screen → Main Menu → Start a new run |
 | **Lose** | Player health reaches 0 (permadeath) | Game Over screen → Run stats (time, kills, rooms cleared) → Main Menu → Start a new run |
 
 **Permadeath Rule:** There are no continues or checkpoints. Death ends the run permanently. Progress is not saved between runs (meta-progression is a future consideration under Phase 7).
@@ -244,7 +243,7 @@ Scripts/
 │   │   ├── EnemyStartingWeapon.cs
 │   │   ├── ObstacleAvoidance.cs, ObstacleRaycast.cs
 │   │   ├── EnemyBehaviorRelated/  # EnemyBehavior.cs (base), EnemyState.cs, MeleeBehavior.cs, ShooterBehavior.cs, RobberBehavior.cs
-│   │   └── (planned) ShooterBehavior, RobberBehavior, BossBehavior, BossPhase
+│   │   └── (planned) RusherBehavior, TankBehavior
 │   ├── Player/          # Player-specific components
 │   │   └── PlayerDeathHandler.cs
 │   ├── PlayerInput/     # Unity Input System bridge
@@ -379,7 +378,7 @@ Scripts/
 | Mosin | 30 | 1 | 5 | 5s | 15 | 10° | Projectile | Magazine |
 | Katana | 10 | 1 | 1 | 0s | 0 | 90° | Melee | Infinite |
 
-**Status**: ✅ Complete (melee no-friendly-fire 🚧 pending Play-mode verification)
+**Status**: ✅ Complete (melee no-friendly-fire verified)
 
 ---
 
@@ -394,7 +393,7 @@ Scripts/
 - Returns to the pool on hit or after its 5 s lifetime (never `Destroy`ed)
 - `ProjectileFireStrategy` fetches instances from `PoolManager` (§4.13)
 
-**Status**: ✅ Complete (no-friendly-fire 🚧 pending Play-mode verification)
+**Status**: ✅ Complete (no-friendly-fire verified)
 
 ---
 
@@ -638,31 +637,31 @@ GameplayCanvas
 |------|----------|
 | **Combat** | Spawns enemies. Exits lock. Clear all enemies to unlock. |
 | **Item** | Contains a weapon or modifier pickup. No enemies. |
-| **Boss** | Final room. Boss enemy with phases. Clears = map complete (ends the run). |
+| **Final** | Final room. Dense wave of normal enemies (boss enemy cut — out of scope). Clears = map complete (ends the run). |
 | **Start** | Entry point. No enemies, no pickups. |
 
 #### Room Controller
 - `RoomData` (ScriptableObject): room type, tile dimensions, the enemy spawn list (`EnemySpawnEntry`: prefab + count), and an optional `ItemPickupPrefab` (a weapon prefab or a `ModifierPickup` prefab).
-- `RoomController` (MonoBehaviour): state machine `Idle → Active → Cleared`. Activates when the player enters the room's trigger collider (or explicitly via the DungeonManager). Only `Combat`/`Boss` rooms lock; `Start`/`Item` never lock and never count.
+- `RoomController` (MonoBehaviour): state machine `Idle → Active → Cleared`. Activates when the player enters the room's trigger collider (or explicitly via the DungeonManager). Only `Combat`/`Final` rooms lock; `Start`/`Item` never lock and never count.
 - `RoomDoor`: a `Collider2D` **trigger** detects the player; a child `Blocker` collider is enabled only while locked. Unlocked/cleared rooms stay unlocked.
 - `RoomEnemy`: registrar on each enemy — finds its parent `RoomController`, registers on enable, forwards `Health.Died`. Keeps death accounting off `DestroyOnDeath`'s ordering.
 - `RoomEnemySpawner` / `RoomItemSpawner`: on `RoomActivated`, spawn once from `RoomData` at the room's `RoomSpawnPoint`s filtered by `SpawnPointKind` (`Enemy` / `Item`). Enemies parent under the spawn root so `RoomEnemy` can find the room; the item pickup parents under the room so a taken pickup can never respawn (`Activate()` fires once per cached instance).
 - Clearing the last tracked enemy → unlock doors, fire `RoomCleared`, call `RunManager.AddRoomCleared()`. The clear check runs whenever an enemy leaves the tracked set (death *or* removal), so it does not depend on `DestroyOnDeath` firing `Died` before it destroys the enemy.
-- Clearing a `RoomType.Boss` room also completes the run: `RoomController.CompleteRun()` calls `RunManager.EndRun()` then `GameManager.SetState(GameState.GameOver)`. This is a placeholder that reuses the existing Game Over screen (stats + Restart / Main Menu); the dedicated victory screen is 5.5.
+- Clearing a `RoomType.Final` room also completes the run: `RoomController.CompleteRun()` calls `RunManager.EndRun()` then `GameManager.SetState(GameState.GameOver)`; the dedicated victory screen (5.5) now handles the run-end flow instead of the old Game Over placeholder.
 
 #### Map & Transitions
 - `MapData` (ScriptableObject): ordered `MapRoomEntry` list — each entry = `RoomData` + room prefab + `worldPosition` + explicit `RoomDoorLink`s (`from` direction → `toRoomIndex` → `to` direction).
 - **Discrete rooms**: one active room prefab at a time. `DungeonManager` instantiates the entry room, subscribes to its doors, and on a linked door crossing: fade out → deactivate the current room → activate (or first-time instantiate) the next → teleport the player just inside the arrival door → `Activate()` → snap camera → fade in.
 - **Room caching (backtracking)**: visited rooms are cached in a dictionary and only deactivated, never destroyed, so their state persists — dead enemies stay dead, a dropped weapon stays on the floor, a taken pickup does not come back. `Activate()` is idempotent, so a cleared room re-shown does not re-lock or re-spawn.
 - `RoomCamera` locks the view to the active room root (no player-follow); `RoomTransitionOverlay` (CanvasGroup) provides the black fade and blocks input during a swap.
-- `RoomDoorLink`s are authored **forward**; `DungeonManager` builds a runtime connection table and adds the reverse of every link automatically. `RoomDoorLink._oneWay` opts a link out of auto-reverse (e.g. a boss door that seals behind you). A room needs a door matching each link's `to` direction.
+- `RoomDoorLink`s are authored **forward**; `DungeonManager` builds a runtime connection table and adds the reverse of every link automatically. `RoomDoorLink._oneWay` opts a link out of auto-reverse (e.g. a Final Room door that seals behind you). A room needs a door matching each link's `to` direction.
 
 #### Room Generator (Future)
 - If procedural generation is added later: `RoomGenerator` picks from a pool of room templates
 - Templates are pre-built tilemap rooms with spawn points
 - Generator connects them in a valid graph
 
-**Status**: ✅ Complete — 3.1–3.5 (room core + map/transitions), 3.7 (enemy spawner), 3.9 (start room) and 3.10 (backtracking) are done. 3.6 (room tilemap) was **dropped** — rooms are hand-crafted prefabs with sprite art, and a spare 16×16 tileset lives in `Assets/Sprites/Room/TileSet`. **Content still open**: no Item room and no Boss room are currently authored — the `RoomItemSpawner` code path and the boss-run-end path exist but nothing is wired to them (the spawner components are also disabled on both live room prefabs). Clearing a `Boss` room ends the run (reuses the Game Over screen; dedicated victory screen is 5.5).
+**Status**: ✅ Complete — 3.1–3.5 (room core + map/transitions), 3.7 (enemy spawner), 3.8 (item room) and 3.9 (start room) and 3.10 (backtracking) are done. 3.6 (room tilemap) was **dropped** — rooms are hand-crafted prefabs with sprite art, and a spare 16×16 tileset lives in `Assets/Sprites/Room/TileSet`. The **Final Room** is authored and ends the run on clear (the multi-phase boss enemy was **cut — out of scope**; the room uses normal enemies). Run end shows the dedicated victory screen (5.5).
 
 ---
 
@@ -681,7 +680,7 @@ GameplayCanvas
 | **Tank** | Slow, high HP. Uses a heavy slow weapon with great damage and slow projectile speed. | Ranged (heavy, slow) |
 | **Support** | Stays far. Buffs nearby enemies (speed/damage aura). | Passive aura |
 | **Robber** | If player has weapon: rushes in, steals it, runs away, then shoots player with it after a few seconds. If player has no weapon: hides and stays as far as possible until player picks one up. | Adaptive (steal → ranged) |
-| **Boss** | Multi-phase. Unique patterns per phase. Summons minions. | Mixed |
+| ~~**Boss**~~ | **Cut** — out of scope. The Final Room now uses normal enemies; clearing it completes the run. | — |
 
 #### Implementation Approach
 ```
@@ -691,7 +690,7 @@ EnemyBehavior (base)        ← existing FSM skeleton + CanAcceptWeapon() hook (
   ├── RusherBehavior        ← (planned) telegraph, charge, cooldown (melee only)
   ├── TankBehavior          ← (planned) slow approach, heavy slow projectile
   ├── RobberBehavior        ← done: Hiding/Stealing/Fleeing FSM, steals via `WeaponHolder.Equip` (4.4)
-  └── BossBehavior          ← (planned) phase system, minion spawning
+  └── BossBehavior          ← (cut) boss enemy removed from scope; the Final Room uses normal enemies
 ```
 
 #### Melee Enemy FSM Detail
@@ -762,7 +761,7 @@ Attacking
 | `ShooterEnemy.cs` (`Entities/EnemyRelated`) | Entity shell — requires `ShooterBehavior` |
 | `RobberEnemy.cs` (`Entities/EnemyRelated`) | Entity shell — requires `RobberBehavior`; spawns barehanded (no `EnemyStartingWeapon`) |
 
-**Status**: ✅ **Phase 4 (Enemy Variety) complete** — Melee (4.1 + 4.2), Shooter (4.3) and Robber (4.4) code + assets + prefabs authored and verified in Play mode; spawner (4.5) was already done. Boss (Phase 5) not started.
+**Status**: ✅ **Phase 4 (Enemy Variety) complete** — Melee (4.1 + 4.2), Shooter (4.3) and Robber (4.4) code + assets + prefabs authored and verified in Play mode; spawner (4.5) was already done. Boss (Phase 5) was **cut — out of scope**; the Final Room is a normal-enemy encounter that ends the run.
 
 #### Robber FSM Detail
 ```
@@ -867,13 +866,13 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 #### Wiring
 - Lives on the `Bootstrap` scene's `Persistent` object (sixth component), so music survives scene changes.
 - `Bootstrap` declares `[RequireComponent(typeof(AudioManager))]` and fails fast if it is missing.
+- `Bootstrap` starts the **global music track** (`[SerializeField] private AudioClip _music`) via `PlayMusic` right after `ApplyVolumes()`; the same-clip guard prevents accidental restarts.
 - Existing `WeaponAudioFeedback` / `HealthAudioFeedback` sources route to the `SFX` group through their `Output` field, so they obey the SFX slider with no code changes.
 
 #### Known limitations
-- No music clips imported yet — the playback API is ready; drop tracks into `Assets/Audio/Music`.
-- No cross-fade, ducking, or per-scene music automation (Phase 3.5 territory).
+- No cross-fade, ducking, or per-scene music automation yet (Phase 6 territory — `SceneLoader.SceneLoaded` is the hook when needed).
 
-**Status**: ✅ Complete (mixer + both layers wired; music content pending)
+**Status**: ✅ Complete (mixer + both layers wired; global music playing from `Bootstrap`)
 
 ---
 
@@ -900,7 +899,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 |-------|----------|--------|----------|
 | **Bootstrap** | ✅ Yes (index 0) | Entry | `Persistent` object: `GameManager`, `RunManager`, `SceneLoader`, `PauseInput`, `AudioManager`, `Bootstrap` |
 | **MainMenu** | ✅ Yes (index 1) | ✅ Done | Main Menu UI (Title, New Game, Settings, Quit) + shared Settings panel (prefab instance) |
-| **Gameplay** | ✅ Yes (index 2) | 🚧 WIP | Player, `PoolManager`, weapon pickups, Pause/Settings UI, HUD (health / timer / weapon) and Game Over overlay. Room system + map-driven room swapping done (3A/3B); combat rooms spawn from `RoomData` (3C.1). |
+| **Gameplay** | ✅ Yes (index 2) | ✅ Done | Player, `PoolManager`, weapon pickups, Pause/Settings UI, HUD (health / timer / weapon) and Game Over overlay. Room system + map-driven room swapping done (3A/3B); combat rooms spawn from `RoomData` (3C.1); item room authored (3.8). |
 | **SampleScene** | ✅ Yes (index 3) | Legacy sandbox | Original test scene (played directly, no `GameManager`) — not part of the game flow |
 
 > **Always press Play from `Bootstrap`** (build index 0). The persistent managers are created there; the other scenes rely on them surviving the scene load (see §4.16).
@@ -969,7 +968,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | **Audio via mixer groups** | Music and SFX route to `AudioMixer` groups — one place controls each category's volume; `GameSettings` feeds it in decibels |
 | **Enemy types via composition** | Each enemy type is a `MonoBehaviour` composing or extending base FSM — not a monolithic class |
 | **Raycast steering, no nav asset** | `ObstacleAvoidance` whiskers + `ObstacleRaycast` LOS gating — ~100 lines solves wall-welding and shoot-through-walls for hand-crafted rooms; A* would be overkill until rooms become maze-like |
-| **Boss as room event** | Boss is a special room type, not a separate scene — keeps state consistent |
+| **Run ends in a room, not a scene** | The Final Room (final encounter) is a special room type, not a separate scene — keeps state consistent; the boss *enemy* was cut (out of scope), so the room is a normal-enemy wave that ends the run on clear |
 
 ---
 
@@ -1009,8 +1008,8 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | Map & Transitions | ✅ Done | `Components/Map` — MapData/DungeonManager/RoomCamera + fade overlay; map-driven room swapping verified |
 | Enemy Spawner | ✅ Done | `Components/Rooms` — `RoomEnemySpawner` + `RoomSpawnPoint`/`EnemySpawnEntry`; combat rooms spawn once from `RoomData.Enemies` |
 | Backtracking | ✅ Done | Rooms cached (never destroyed) + auto-reversed door links; cleared state, drops, and taken pickups persist |
-| Item Spawner | ✅ Done (system) | `RoomItemSpawner` + `RoomData.ItemPickupPrefab` — spawns one weapon/modifier on room activate. **No item room content authored yet** |
-| Boss Room (placeholder) | ✅ Done (system) | `RoomType.Boss` reuses the same `RoomEnemySpawner`; clearing it ends the run via the Game Over flow. **No boss room content authored yet**; the real multi-phase boss is 5.2 |
+| Item Spawner | ✅ Done | `RoomItemSpawner` + `RoomData.ItemPickupPrefab` — spawns one weapon/modifier on room activate; item room content authored (3.8) |
+| Final Room | ✅ Done | `RoomType.Final` reuses the same `RoomEnemySpawner` with normal-enemy content; clearing it ends the run → victory screen (5.5). The multi-phase boss enemy was **cut** (out of scope) |
 
 ---
 
@@ -1021,14 +1020,14 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | Gap | Category | Priority | Roadmap |
 |-----|----------|----------|---------|
 | **Enemy types** — Rusher, Floater, Tank, Support (later) | Core | 🟢 Low | 7.3 |
-| **Boss** — multi-phase enemy | Core | 🔴 High | 5.2–5.5 |
+| ~~**Boss** — multi-phase enemy~~ | — | **Cut** (out of scope) — the Final Room uses normal enemies and ends the run on clear |
 | **Modifier HUD** — active modifiers + duration | UI | 🟡 Medium | 6.9 |
 | **Animations** — idle / walk / attack / death | Visual | 🟡 Medium | 6.2 |
 | **Particle effects** — blood, sparks, bursts | Visual | 🟡 Medium | 6.7 |
 | **Screen shake** | Visual | 🟡 Medium | 2.8 |
-| **Room / enemy / boss SFX** | Audio | 🟡 Medium | 6.5–6.6 |
+| **Room / enemy SFX** | Audio | 🟡 Medium | 6.5–6.6 |
 | **Unit tests** | Technical | 🟡 Medium | — |
-| **Music content** — menu, combat, boss | Audio | 🟢 Low | 6.4 |
+| **Music content** — menu, combat, item | Audio | 🟢 Low | 6.4 |
 | **Damage numbers** | Visual | 🟢 Low | 6.8 |
 | **Minimap** | UI | 🟢 Low | 6.10 |
 | **Save / meta-progression** | Technical | 🟢 Low | 7.6 |
@@ -1039,7 +1038,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 ## 12. Roadmap — Work Plan
 
 > Ordered by dependency. Each phase builds on the previous.
-> Reference: *The Binding of Isaac* (room flow, item rooms, boss fights) / *Enter The Gungeon* (projectile density, dodge mechanics, weapon variety).
+> Reference: *The Binding of Isaac* (room flow, item rooms) / *Enter The Gungeon* (projectile density, dodge mechanics, weapon variety).
 > Open work is summarized by priority in §11; the tables below sequence it into tasks and dependencies.
 
 ### Phase 1: Foundation (🔴 Critical)
@@ -1081,10 +1080,10 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | 3.1 | **RoomData (SO)** ✅ | Room type, dimensions, door positions, enemy spawn list. | — |
 | 3.2 | **RoomController** ✅ | Tracks enemies alive. `RoomCleared` event. Lock/unlock doors. | 1.2 |
 | 3.3 | **RoomDoor** ✅ | Collider2D trigger. Locks on room enter, unlocks on room clear. | 3.2 |
-| 3.4 | **Map Structure** ✅ | Linear room sequence: Start → Combat → Item → Combat → ... → Boss. `MapData`/`MapRoomEntry`/`RoomDoorLink` + editor `Map_Test`. | 3.1, 3.2 |
+| 3.4 | **Map Structure** ✅ | Linear room sequence: Start → Combat → Item → Combat → ... → Final. `MapData`/`MapRoomEntry`/`RoomDoorLink` + editor `Map_Test`. | 3.1, 3.2 |
 | 3.5 | **Room Transitions** ✅ | Player enters door → fade → swap room → teleport → camera frame. `DungeonManager`/`RoomCamera`/`RoomTransitionOverlay`. | 3.4, 1.4 |
 | 3.7 | **Combat Room** ✅ | Spawns enemies (once) on enter. Clears when all enemies dead. `RoomEnemySpawner`. | 3.2, 2.1 |
-| 3.8 | **Item Room** 🚧 | The spawner (`RoomItemSpawner` + `RoomData.ItemPickupPrefab`) is implemented; **no item room prefab/data is authored yet**. | 3.2 |
+| 3.8 | **Item Room** ✅ | Item room content authored; the pickup spawns via `RoomItemSpawner` + `RoomData.ItemPickupPrefab` on room activate. | 3.2 |
 | 3.9 | **Start Room** ✅ | Entry point. No enemies, no pickups. `Rooms/Start/Room_Start_1_N` prefab + data. | 3.2 |
 | 3.10 | **Backtracking** ✅ | Revisit cleared rooms; room state persists (dead enemies stay dead, dropped items stay). | 3.5 |
 
@@ -1100,16 +1099,16 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | 4.4 | **Robber Enemy** ✅ | Steals player weapon if equipped, flees, then shoots. Hides if player unarmed. `RobberBehavior` + `EnemyState` extension (`Hiding`/`Stealing`/`Fleeing`) + `EnemyData_Robber` + `RobberEnemy` prefab (barehanded). Verified in Play mode. | 4.1, 2.1, 1.1 |
 | 4.5 | **Enemy Spawner** ✅ | Room-level spawner. Spawns enemies from `RoomData` definitions. | 3.7 |
 
-### Phase 5: Boss & Progression (🟡 Important)
+### Phase 5: Final Room & Run End (🟡 Important)
 
-> The climax of each map run.
+> The climax of each map run. The multi-phase boss enemy was **cut (out of scope)** — the Final Room is the run-ending encounter, built from normal enemies.
 
 | # | Task | Description | Depends On |
 |---|------|-------------|------------|
-| 5.1 | **Boss Room** | Special room type. Triggers boss encounter on enter. | 3.2 |
-| 5.2 | **Boss Enemy** | Multi-phase enemy. Unique attack patterns per phase. High HP. | 4.1 |
-| 5.3 | **Boss Phases** | Phase transitions: HP thresholds trigger new attack patterns, telegraph, UI. | 5.2 |
-| 5.5 | **Map Complete** 🚧 | Boss death → victory screen → back to main menu. Placeholder done: clearing a `Boss` room already ends the run (reuses the Game Over screen). Dedicated victory screen still pending. | 5.2, 2.6 |
+| 5.1 | **Final Room** ✅ | Final room type (`RoomType.Final`): locks on enter, spawns a dense normal-enemy wave, clears → run end. | 3.2 |
+| 5.2 | ~~Boss Enemy~~ ❌ | **Cut** — multi-phase boss removed from scope. | — |
+| 5.3 | ~~Boss Phases~~ ❌ | **Cut** — removed with the boss enemy. | — |
+| 5.5 | **Map Complete** ✅ | Run end → victory screen → back to main menu. | 5.1, 2.6 |
 
 ### Phase 6: Polish & Juice (🟢 Nice to Have)
 
@@ -1118,10 +1117,10 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | # | Task | Description | Depends On |
 |---|------|-------------|------------|
 | 6.1 | **Placeholder Sprites** | Replace colored squares with temp pixel art for all entities. | — |
-| 6.2 | **Sprite Animations** | Idle, walk, attack, death for player, enemies, boss. | 6.1 |
-| 6.4 | **Music** | BGM per state: menu, combat, boss, item room. | 1.8 |
+| 6.2 | **Sprite Animations** | Idle, walk, attack, death for player and enemies. | 6.1 |
+| 6.4 | **Music** | BGM per state: menu, combat, item room. | 1.8 |
 | 6.5 | **Enemy SFX** | Attack, death, and ambient sounds per enemy type. | 1.8, 4.2-4.4 |
-| 6.6 | **Boss SFX** | Entrance, phase transition, death sounds. | 1.8, 5.2 |
+| 6.6 | ~~**Boss SFX**~~ | **Cut** — removed with the boss enemy. | — |
 | 6.7 | **Particle Effects** | Blood splatter, muzzle sparks, death burst, room clear effect. | 6.1 |
 | 6.8 | **Damage Numbers** | Floating text on hit. Color-coded (normal, crit). | — |
 | 6.9 | **Modifier HUD** | Active modifier icons with duration bars. | — |
@@ -1140,7 +1139,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | 7.5 | **Procedural Generation** | `RoomGenerator` picks from template pool, connects valid graphs. | 3.4 |
 | 7.6 | **Meta-progression** | Persistent upgrades across runs. | 1.3 |
 | 7.7 | **Shop System** | Spend currency on weapons/modifiers between rooms. | 4.5 |
-| 7.8 | **Challenge Runs** | Difficulty modifiers (more enemies, less HP, harder bosses). | 7.6 |
+| 7.8 | **Challenge Runs** | Difficulty modifiers (more enemies, less HP, tougher final room). | 7.6 |
 
 ---
 
@@ -1154,7 +1153,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | **Fire Strategies** | Melee, Projectile |
 | **Modifiers** | DoubleDamage, DoubleFireRate, DoubleReload, DoubleSpeed, DoubleShot |
 | **Enemies** | `Data/Enemies/EnemyData_Melee`, `Data/Enemies/EnemyData_Shooter`, `Data/Enemies/EnemyData_Robber` |
-| **Rooms** | `Data/Rooms/Combat/Room_Combat_1_ES`, `Data/Rooms/Start/Room_Start_1_N` (Item + Boss rooms not authored yet) |
+| **Rooms** | `Data/Rooms/Combat/Room_Combat_1_ES`, `Data/Rooms/Start/Room_Start_1_N` (+ item and Final Room data) |
 | **Maps** | `Data/Maps/Map_Test` — 2 entries: Start → Combat |
 
 ### Audio
@@ -1179,7 +1178,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | `Assets/Sprites/Modifiers/*.png` | One 16×16 icon per modifier (DoubleDamage, DoubleFireRate, DoubleReload, DoubleShot, DoubleSpeed) |
 | `Assets/Sprites/Effects/MuzzleFlash.png` | Weapon VFX — sprite 14×16 px (16×16 canvas) |
 
-> **Planned sprites** — per-enemy-type art (Melee/Shooter/Rusher 32×32, Tank 48×48, Boss 64×64) and a dedicated bullet sprite (the projectile currently uses a built-in placeholder). Canvas sizes in [§1 → Sprite Canvas Specs](#visual-specs); all at 16 PPU, Point filter, no compression.
+> **Planned sprites** — per-enemy-type art (Melee/Shooter/Rusher 32×32, Tank 48×48) and a dedicated bullet sprite (the projectile currently uses a built-in placeholder). Canvas sizes in [§1 → Sprite Canvas Specs](#visual-specs); all at 16 PPU, Point filter, no compression.
 
 ### Prefabs
 

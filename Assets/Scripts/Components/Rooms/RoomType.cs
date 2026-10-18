@@ -5,6 +5,6 @@ namespace Components.Rooms
         Start,
         Combat,
         Item,
-        Boss
+        Final
     }
 }

@@ -12,17 +12,18 @@ namespace Systems.Game
     
     public class Bootstrap : MonoBehaviour
     {
+        [SerializeField] private AudioClip _music;
         private void Start()
         {
             if (GameManager.Instance == null || RunManager.Instance == null || SceneLoader.Instance == null ||
                 AudioManager.Instance == null)
                 throw new MissingReferenceException(
                     $"{name}: Bootstrap needs GameManager, RunManager, SceneLoader and AudioManager on the same persistent object.");
-
+            
             GameSettings.Load();
             GameSettings.ApplyDisplaySettings();
             AudioManager.Instance.ApplyVolumes();
-
+            AudioManager.Instance.PlayMusic(_music);
             GameManager.Instance.SetState(GameState.MainMenu);
             SceneLoader.Instance.Load(SceneId.MainMenu);
         }

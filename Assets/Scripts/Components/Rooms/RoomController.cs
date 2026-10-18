@@ -97,7 +97,7 @@ namespace Components.Rooms
         }
 
         private bool RequiresCombat =>
-            _data.RoomType == RoomType.Combat || _data.RoomType == RoomType.Boss;
+            _data.RoomType == RoomType.Combat || _data.RoomType == RoomType.Final;
 
         private void ClearRoom()
         {
@@ -112,7 +112,7 @@ namespace Components.Rooms
 
             RoomCleared?.Invoke();
 
-            if (_data.RoomType == RoomType.Boss)
+            if (_data.RoomType == RoomType.Final)
                 CompleteRun();
         }
 
