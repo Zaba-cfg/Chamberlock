@@ -22,7 +22,7 @@
 | &emsp; 4.7 [Interaction System](#47-interaction-system) | Trigger-based closest selection |
 | &emsp; 4.8 [Weapon Pickup & Detection](#48-weapon-pickup--detection) | Pickup and area scanning |
 | &emsp; 4.9 [Player Input](#49-player-input-system) | Mouse + Gamepad, IMoveInput |
-| &emsp; 4.10 [Enemy AI](#410-enemy-ai-system) | 3-state FSM |
+| &emsp; 4.10 [Enemy AI](#410-enemy-ai-system) | FSM (3 baseline + per-type states) |
 | &emsp; 4.11 [UI System](#411-ui-system) | HUD + menus |
 | &emsp; 4.12 [Debug System](#412-debug-system) | Loggers and testers |
 | &emsp; 4.13 [Object Pool](#413-object-pool-system) | Generic pooling |
@@ -214,7 +214,7 @@ Scripts/
 ├── Interfaces/          # Contracts (IMoveInput, IInteractable, IModifierProvider)
 ├── Entities/            # Composition shells
 │   ├── PlayerRelated/   # Player.cs, PlayerDeathHandler.cs
-│   └── EnemyRelated/    # Enemy.cs, MeleeEnemy.cs, ShooterEnemy.cs
+│   └── EnemyRelated/    # Enemy.cs, MeleeEnemy.cs, ShooterEnemy.cs, RobberEnemy.cs
 ├── Components/
 │   ├── Base/            # Domain-agnostic reusable components
 │   │   ├── HealthRelated/   # Health, HealthVisualFeedback, HealthAudioFeedback, DestroyOnDeath
@@ -240,7 +240,7 @@ Scripts/
 │   │   ├── EnemyKillCounter.cs, EnemyTargetAssigner.cs
 │   │   ├── EnemyData.cs (ScriptableObject), EnemyDataApplier.cs
 │   │   ├── EnemyStartingWeapon.cs
-│   │   ├── EnemyBehaviorRelated/  # EnemyBehavior.cs (base), EnemyState.cs, MeleeBehavior.cs, ShooterBehavior.cs
+│   │   ├── EnemyBehaviorRelated/  # EnemyBehavior.cs (base), EnemyState.cs, MeleeBehavior.cs, ShooterBehavior.cs, RobberBehavior.cs
 │   │   └── (planned) ShooterBehavior, RobberBehavior, BossBehavior, BossPhase
 │   ├── Player/          # Player-specific components
 │   │   └── PlayerDeathHandler.cs
@@ -487,7 +487,7 @@ result = baseValue
 
 **Files**: `EnemyAIInput.cs`, `EnemyCombat.cs`, `EnemyWeaponDecision.cs`, `EnemyBehavior.cs`, `EnemyState.cs`
 
-#### FSM States
+#### Baseline FSM (3 states)
 ```
 Chasing ──────► SeekingWeapon (no weapon / weapon empty)
   ▲                    │
@@ -507,11 +507,18 @@ Attacking ────► SeekingWeapon (weapon empty / dropped)
 
 | Component | Role |
 |-----------|------|
-| `EnemyAIInput` | Implements `IMoveInput` — calculates direction toward target |
+| `EnemyAIInput` | Implements `IMoveInput` — direction toward `Target`, invertible via `SetRetreating(bool)` (scaled by `_retreatSpeedMultiplier`) and haltable via `SetMoveEnabled(bool)` |
 | `EnemyCombat` | Range check (`Vector2.Distance`), calls `WeaponHolder.TryFire` |
-| `EnemyWeaponDecision` | `GetClosestAvailableWeapon()` from `WeaponDetection`, `IsWeaponInPickupRange()`, `TryEquipNearbyWeapon()` |
+| `EnemyWeaponDecision` | `GetClosestAvailableWeapon(filter)` / `IsWeaponInPickupRange()` / `TryEquipNearbyWeapon(filter)` — optional `Func<Weapon, bool>` filter so types can restrict pickups |
 
-**Status**: ✅ Complete
+#### Dispatch & per-type states
+- `Update()` → `protected virtual HandleState(EnemyState)` — a switch that dispatches the 3 baseline states to `protected virtual` handlers (`HandleChasing`, `HandleSeekingWeapon`, `HandleAttacking`); subclasses override `HandleState` to add states and override individual handlers to modify rules (Template Method).
+- `CurrentState` has a `protected` setter; `protected virtual EnemyState InitialState` (default `Chasing`) selects the entry state per type.
+- **Per-type states** (Phase 4): `EnemyState.Hiding`, `Stealing`, `Fleeing` — used only by `RobberBehavior`.
+- The weapon-acceptance hook `protected virtual bool CanAcceptWeapon(Weapon)` defaults to `true` (baseline `Enemy`); `MeleeBehavior` / `ShooterBehavior` narrow it.
+- Baseline `Enemy` behavior is unchanged by all of the above — it runs exactly the diagram in this section.
+
+**Status**: ✅ Complete (baseline FSM + per-type extension points; per-type behaviors in §4.15)
 
 ---
 
@@ -665,7 +672,7 @@ EnemyBehavior (base)        ← existing FSM skeleton + CanAcceptWeapon() hook (
   ├── ShooterBehavior       ← done: retreat while firing, projectile-only filter (4.3)
   ├── RusherBehavior        ← (planned) telegraph, charge, cooldown (melee only)
   ├── TankBehavior          ← (planned) slow approach, heavy slow projectile
-  ├── RobberBehavior        ← (planned) steal weapon, flee, then shoot
+  ├── RobberBehavior        ← done: Hiding/Stealing/Fleeing FSM, steals via `WeaponHolder.Equip` (4.4)
   └── BossBehavior          ← (planned) phase system, minion spawning
 ```
 
@@ -731,11 +738,13 @@ Attacking
 | `EnemyDataApplier.cs` | `[DefaultExecutionOrder(-90)]` — pushes `EnemyData` into `Health.SetMaxHealth`, `Movement.SetBaseSpeed`, `EnemyCombat.SetAttackRange`, `SpriteRenderer` at Awake |
 | `MeleeBehavior.cs` | `EnemyBehavior` subclass — overrides `CanAcceptWeapon()` (melee only) |
 | `ShooterBehavior.cs` | `EnemyBehavior` subclass — projectile-only filter + retreat-while-firing (`SetRetreating` per state) |
+| `RobberBehavior.cs` | `EnemyBehavior` subclass — `Hiding`/`Stealing`/`Fleeing` states via `HandleState` override; steals the player's held weapon, flees `_fleeDuration`, plants and fires |
 | `EnemyStartingWeapon.cs` | Spawns the assigned weapon prefab and equips it in `Start` |
 | `MeleeEnemy.cs` (`Entities/EnemyRelated`) | Entity shell — requires `MeleeBehavior` instead of `EnemyBehavior` |
 | `ShooterEnemy.cs` (`Entities/EnemyRelated`) | Entity shell — requires `ShooterBehavior` |
+| `RobberEnemy.cs` (`Entities/EnemyRelated`) | Entity shell — requires `RobberBehavior`; spawns barehanded (no `EnemyStartingWeapon`) |
 
-**Status**: 🚧 Melee Enemy (4.1 + 4.2) **complete** — code, assets and prefab verified in Play mode. Shooter Enemy (4.3) code complete — `EnemyData_Shooter` asset + `ShooterEnemy` prefab pending, verification pending. Robber/Boss not started.
+**Status**: ✅ **Phase 4 (Enemy Variety) complete** — Melee (4.1 + 4.2), Shooter (4.3) and Robber (4.4) code + assets + prefabs authored and verified in Play mode; spawner (4.5) was already done. Boss (Phase 5) not started.
 
 #### Robber FSM Detail
 ```
@@ -756,6 +765,13 @@ Attacking
   ├─ stop, face player, fire stolen weapon
   └─ continue attacking until weapon empty or player dies
 ```
+
+- **State extension**: `RobberBehavior` starts at `InitialState = Hiding` and overrides `HandleState` for the three new states; it never enters `Chasing`/`SeekingWeapon`.
+- **Theft mechanics**: no new API needed — `WeaponHolder.Equip(weapon)` already drops a weapon from its current holder, so equipping the player's held weapon *is* the steal (range = `EnemyWeaponDecision.IsWeaponInPickupRange`, i.e. the robber must reach the player).
+- **Player weapon detection**: lazily resolves `Player → WeaponHolder` via `FindFirstObjectByType<Player>()` (no `Awake` in the subclass — Unity would shadow the base's private `Awake`).
+- **Standing still while shooting**: `EnemyAIInput.SetMoveEnabled(false)` — unique to the Robber's Attacking; the Shooter fires on the run, the Robber plants its feet.
+- **Hiding comfort zone**: retreats only while the player is within `EnemyCombat` attack range; holds position when the player is far.
+- **Stolen weapon variety**: no filter — it steals *whatever* the player holds (a stolen Katana makes it close in like a melee enemy, since `HandleAttacking` approaches when out of range).
 
 - Each type is a `MonoBehaviour` that inherits from or composes `EnemyBehavior`
 - `EnemyCombat` adapts per type (some use `WeaponHolder`, some use custom logic)
@@ -880,6 +896,8 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | **Player** | Player entity shell with all components (100 HP, speed 5, `PlayerDeathHandler`) |
 | **Enemy** | Enemy entity shell with AI, combat, weapon detection, `DestroyOnDeath`, `EnemyKillCounter` |
 | **MeleeEnemy** | Melee enemy (prefab variant of Enemy) — `MeleeBehavior`, `EnemyDataApplier` (`EnemyData_Melee`), `EnemyStartingWeapon` (Katana) |
+| **ShooterEnemy** | Shooter enemy (prefab variant of Enemy) — `ShooterBehavior`, `EnemyDataApplier` (`EnemyData_Shooter`), `EnemyStartingWeapon` (Pistol), retreat 0.6× |
+| **RobberEnemy** | Robber enemy (prefab variant of Enemy) — `RobberBehavior`, `EnemyDataApplier` (`EnemyData_Robber`), barehanded spawn |
 | **Projectile** | Bullet — speed 15, pooled, 5 s lifetime, trigger collider |
 | **Pistol / Colt / Mosin / Katana** | Weapon pickups (each with its own `WeaponData`, sprite and audio feedback) |
 | **PoolManagerProjectile** | `PoolManager` pre-configured for projectile pooling |
@@ -951,9 +969,11 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | Weapon Pickup | ✅ Done | IInteractable integration |
 | Weapon Detection | ✅ Done | Area-based weapon scanning |
 | Player Input | ✅ Done | Mouse + Gamepad, IMoveInput |
-| Enemy AI | ✅ Done | 3-state FSM, weapon seeking, combat |
+| Enemy AI | ✅ Done | FSM — 3 baseline states + per-type states (`HandleState` Template Method), weapon seeking (filterable), combat |
 | EnemyData | ✅ Done | `Components/EnemyComponents` — `EnemyData` (SO) + `EnemyDataApplier`; per-type stats pushed into Health/Movement/EnemyCombat at spawn |
 | Melee Enemy | ✅ Done | First per-type behavior — `MeleeBehavior` (melee-only weapon filter via `CanAcceptWeapon` hook), `MeleeEnemy` prefab, `EnemyStartingWeapon` (spawns equipped) |
+| Shooter Enemy | ✅ Done | `ShooterBehavior` — retreat-while-firing (`EnemyAIInput.SetRetreating`, 0.6×), projectile-only weapon filter, keeps distance when unarmed; `ShooterEnemy` prefab (Pistol) |
+| Robber Enemy | ✅ Done | `RobberBehavior` — `Hiding`/`Stealing`/`Fleeing` states, steals the player's held weapon via `WeaponHolder.Equip`, flees 2.5 s, plants and fires; `RobberEnemy` prefab (barehanded) |
 | Weapon UI | ✅ Done | `WeaponHudUI` — icon, name, ammo, reload (legacy `WeaponAmmoUI` in SampleScene) |
 | Debug Tools | ✅ Done | Loggers + testers for all systems |
 | Object Pool | ✅ Done | `Systems/Pool` — `ObjectPool<T>` + `PoolManager`; projectiles pooled (prewarm 32, grows on demand) |
@@ -981,7 +1001,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 
 | Gap | Category | Priority | Roadmap |
 |-----|----------|----------|---------|
-| **Enemy types** — Shooter, Robber (Phase 4); Rusher, Floater, Tank, Support (later) | Core | 🔴 High | 4.3–4.4, 7.3 |
+| **Enemy types** — Rusher, Floater, Tank, Support (later) | Core | 🟢 Low | 7.3 |
 | **Boss** — multi-phase enemy | Core | 🔴 High | 5.2–5.5 |
 | **Modifier HUD** — active modifiers + duration | UI | 🟡 Medium | 6.9 |
 | **Animations** — idle / walk / attack / death | Visual | 🟡 Medium | 6.2 |
@@ -1057,8 +1077,8 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 |-----|------|--------------------------------------------------------------------------------|------------|
 | 4.1 | **EnemyData (SO)** ✅ | Per-type stats: speed, HP, attack range, sprite. `EnemyData` + `EnemyDataApplier`; `EnemyData_Melee` asset authored. | — |
 | 4.2 | **Melee Enemy** ✅ | Only equips melee weapons. Always closes distance to the player and strikes at reach. First per-type behavior (`MeleeBehavior`); `MeleeEnemy` prefab + `EnemyStartingWeapon` (Katana). Verified in Play mode. | 4.1, 2.1 |
-| 4.3 | **Shooter Enemy** 🚧 | Shoots while slowly backing away. Projectile-only weapon filter; seeks a new firearm when empty. Code done (`ShooterBehavior`); `EnemyData_Shooter` + `ShooterEnemy` prefab pending. | 4.1, 2.1, 1.1 |
-| 4.4 | **Robber Enemy** | Steals player weapon if equipped, flees, then shoots. Hides if player unarmed. | 4.1, 2.1, 1.1 |
+| 4.3 | **Shooter Enemy** ✅ | Shoots while slowly backing away. Projectile-only weapon filter; seeks a new firearm when empty. `ShooterBehavior` + `EnemyData_Shooter` + `ShooterEnemy` prefab (Pistol, retreat 0.6×). Verified in Play mode. | 4.1, 2.1, 1.1 |
+| 4.4 | **Robber Enemy** ✅ | Steals player weapon if equipped, flees, then shoots. Hides if player unarmed. `RobberBehavior` + `EnemyState` extension (`Hiding`/`Stealing`/`Fleeing`) + `EnemyData_Robber` + `RobberEnemy` prefab (barehanded). Verified in Play mode. | 4.1, 2.1, 1.1 |
 | 4.5 | **Enemy Spawner** ✅ | Room-level spawner. Spawns enemies from `RoomData` definitions. | 3.7 |
 
 ### Phase 5: Boss & Progression (🟡 Important)
@@ -1114,7 +1134,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | **Weapons** | Pistol, Colt, Mosin, Katana |
 | **Fire Strategies** | Melee, Projectile |
 | **Modifiers** | DoubleDamage, DoubleFireRate, DoubleReload, DoubleSpeed, DoubleShot |
-| **Enemies** | `Data/Enemies/EnemyData_Melee` |
+| **Enemies** | `Data/Enemies/EnemyData_Melee`, `Data/Enemies/EnemyData_Shooter`, `Data/Enemies/EnemyData_Robber` |
 | **Rooms** | `Data/Rooms/Combat/Room_Combat_1_ES`, `Data/Rooms/Start/Room_Start_1_N` (Item + Boss rooms not authored yet) |
 | **Maps** | `Data/Maps/Map_Test` — 2 entries: Start → Combat |
 
@@ -1149,6 +1169,8 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | Player | Player entity (Health, PlayerInput, WeaponHolder, LookDirection, Interaction, `PlayerDeathHandler`) |
 | Enemy | Enemy entity (AI, WeaponHolder, Health, `DestroyOnDeath`, `EnemyKillCounter`) |
 | MeleeEnemy | Melee enemy entity — prefab variant of Enemy (`MeleeBehavior`, `EnemyDataApplier`, `EnemyStartingWeapon` with Katana) |
+| ShooterEnemy | Shooter enemy entity — prefab variant of Enemy (`ShooterBehavior`, `EnemyDataApplier`, `EnemyStartingWeapon` with Pistol, retreat 0.6×) |
+| RobberEnemy | Robber enemy entity — prefab variant of Enemy (`RobberBehavior`, `EnemyDataApplier`, barehanded; *Flee Duration* 2.5 s) |
 | Projectile | Bullet entity (pooled) |
 | Colt / Pistol / Mosin / Katana | Weapon pickups (each with its own `WeaponData`) |
 | PoolManagerProjectile | `PoolManager` pre-configured for projectile pooling |

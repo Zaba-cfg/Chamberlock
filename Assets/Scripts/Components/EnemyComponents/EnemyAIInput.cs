@@ -11,6 +11,7 @@ namespace Components.EnemyComponents
         [SerializeField, Range(0.1f, 1f)] private float _retreatSpeedMultiplier = 1f;
 
         private bool _retreating;
+        private bool _moveEnabled = true;
 
         private void Awake()
         {
@@ -21,6 +22,12 @@ namespace Components.EnemyComponents
         {
             if (Target == null)
                 return;
+
+            if (!_moveEnabled)
+            {
+                MoveInput = Vector2.zero;
+                return;
+            }
 
             Vector2 direction = Target.position - transform.position;
 
@@ -38,6 +45,11 @@ namespace Components.EnemyComponents
         public void SetRetreating(bool retreating)
         {
             _retreating = retreating;
+        }
+
+        public void SetMoveEnabled(bool enabled)
+        {
+            _moveEnabled = enabled;
         }
     }
 }

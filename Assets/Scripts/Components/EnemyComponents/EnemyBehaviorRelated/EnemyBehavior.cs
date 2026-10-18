@@ -12,8 +12,8 @@ namespace Components.EnemyComponents.EnemyBehaviorRelated
 
     public class EnemyBehavior : MonoBehaviour
     {
-        public EnemyState CurrentState { get; private set; }
-    
+        public EnemyState CurrentState { get; protected set; }
+
         protected EnemyAIInput _aiInput;
         protected EnemyCombat _combat;
         protected EnemyWeaponDecision _weaponDecision;
@@ -22,6 +22,8 @@ namespace Components.EnemyComponents.EnemyBehaviorRelated
     
         [SerializeField] private Transform _target;
         public Transform Target => _target;
+
+        protected virtual EnemyState InitialState => EnemyState.Chasing;
 
         public void SetTarget(Transform target)
         {
@@ -42,12 +44,17 @@ namespace Components.EnemyComponents.EnemyBehaviorRelated
             _lookDirection = GetComponent<LookDirection>();
             _weaponHolder = GetComponent<WeaponHolder>();
 
-            CurrentState = EnemyState.Chasing;
+            CurrentState = InitialState;
         }
     
         private void Update()
         {
-            switch (CurrentState)
+            HandleState(CurrentState);
+        }
+
+        protected virtual void HandleState(EnemyState state)
+        {
+            switch (state)
             {
                 case EnemyState.Chasing:
                     HandleChasing();

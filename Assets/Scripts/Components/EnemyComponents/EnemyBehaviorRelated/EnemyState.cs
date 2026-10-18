@@ -4,6 +4,9 @@ namespace Components.EnemyComponents.EnemyBehaviorRelated
     {
         Chasing,
         SeekingWeapon,
-        Attacking
+        Attacking,
+        Hiding,
+        Stealing,
+        Fleeing
     }
 }
