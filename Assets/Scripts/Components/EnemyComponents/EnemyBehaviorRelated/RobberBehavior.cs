@@ -10,8 +10,20 @@ namespace Components.EnemyComponents.EnemyBehaviorRelated
 
         private WeaponHolder _playerWeaponHolder;
         private float _fleeEndTime;
+        private float _baseAttackRange;
+        private bool _baseAttackRangeCaptured;
 
         protected override EnemyState InitialState => EnemyState.Hiding;
+
+        private void OnEnable()
+        {
+            _weaponHolder.WeaponChanged += HandleWeaponChanged;
+        }
+
+        private void OnDisable()
+        {
+            _weaponHolder.WeaponChanged -= HandleWeaponChanged;
+        }
 
         protected override void HandleState(EnemyState state)
         {
@@ -123,6 +135,24 @@ namespace Components.EnemyComponents.EnemyBehaviorRelated
                 return;
 
             CurrentState = EnemyState.Attacking;
+        }
+
+        private void HandleWeaponChanged(Weapon weapon)
+        {
+            if (!_baseAttackRangeCaptured)
+            {
+                _baseAttackRange = _combat.AttackRange;
+                _baseAttackRangeCaptured = true;
+            }
+
+            if (weapon != null && weapon.WeaponData.WeaponFireStrategy is MeleeFireStrategy meleeStrategy)
+            {
+                float muzzleDistance = Vector2.Distance(transform.position, weapon.Muzzle.position);
+                _combat.SetAttackRange(muzzleDistance + meleeStrategy.Range);
+                return;
+            }
+
+            _combat.SetAttackRange(_baseAttackRange);
         }
 
         private bool PlayerHasWeapon()

@@ -46,11 +46,14 @@ namespace Entities.PlayerRelated
         {
             if (!_playerInput.FireHeld)
                 return;
-
-            if (_weaponHolder.CurrentWeapon.CurrentAmmo == 0 && _weaponHolder.CurrentWeapon != null)
-                _weaponHolder.Reload();
             
             _weaponHolder.TryFire(_lookDirection.Forward);
+            
+            if (_weaponHolder.CurrentWeapon == null)
+                return;
+            
+            if (_weaponHolder.CurrentWeapon.CurrentAmmo == 0 )
+                _weaponHolder.Reload();
         }
 
         private void UpdateLookDirection()

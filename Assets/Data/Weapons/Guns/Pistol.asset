@@ -17,7 +17,7 @@ MonoBehaviour:
   _damage: 3
   _fireRate: 3
   _magazineSize: 7
-  _reloadDuration: 2
+  _reloadDuration: 1.5
   _maxReserveAmmo: 21
   _weaponFireStrategy: {fileID: 11400000, guid: dacc133eb8057f54582c8a89360d2d43, type: 2}
   _ammoType: 0

@@ -12,6 +12,7 @@ namespace Components.EnemyComponents
         [SerializeField] private bool _requireLineOfSight = true;
 
         public Transform Target => _target;
+        public float AttackRange => _attackRange;
 
         public void SetTarget(Transform target)
         {

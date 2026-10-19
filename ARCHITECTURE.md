@@ -1,7 +1,7 @@
 # Chamberlock — Architecture & Roadmap
 
 > **Document State**: Alive roadmap — updated during development.
-> **Last Updated**: 2026-10-18
+> **Last Updated**: 2026-10-19
 
 ---
 
@@ -238,7 +238,7 @@ Scripts/
 │   │   └── ModifierPickup.cs, TemporaryModifierPickup.cs
 │   ├── EnemyComponents/ # Enemy AI (per-type subclasses)
 │   │   ├── EnemyAIInput.cs, EnemyCombat.cs, EnemyWeaponDecision.cs
-│   │   ├── EnemyKillCounter.cs, EnemyTargetAssigner.cs
+│   │   ├── EnemyKillCounter.cs, EnemyTargetAssigner.cs, PlayerHealOnKill.cs
 │   │   ├── EnemyData.cs (ScriptableObject), EnemyDataApplier.cs
 │   │   ├── EnemyStartingWeapon.cs
 │   │   ├── ObstacleAvoidance.cs, ObstacleRaycast.cs
@@ -296,6 +296,7 @@ Scripts/
 |-----------|-------|-----------|
 | `DestroyOnDeath` | Enemy | Destroys the GameObject (no animation yet) |
 | `EnemyKillCounter` (`Components.Enemy`) | Enemy | `RunManager.AddKill()` — feeds the run's kill stat |
+| `PlayerHealOnKill` (`Components.Enemy`) | Enemy | `Health.Heal(_healAmount)` (default 10) on the player. Attribution is implicit: friendly fire is impossible (§4.4/§4.5 no-friendly-fire rules), so every enemy death is a player kill |
 | `PlayerDeathHandler` (`Components.Player`) | Player | `RunManager.EndRun()` → `GameManager.SetState(GameOver)` |
 
 **Design Decisions**:
@@ -528,6 +529,12 @@ Attacking ────► SeekingWeapon (weapon empty / dropped)
 - **LOS gating**: `EnemyCombat.CanAttack()` also requires a clear ray to the target — enemies never fire through walls (melee swings included). Breaking LOS drops the FSM back to `Chasing`, so avoidance takes over until the enemy re-acquires the player.
 - Allies don't block LOS (they have `Health`), matching projectile behavior.
 
+#### Enemy–enemy collision
+- Every enemy root lives on the dedicated **`Enemy` layer** (index 6, `ProjectSettings/TagManager.asset`); the prefab variants (`MeleeEnemy`, `ShooterEnemy`, `RobberEnemy`) inherit it from the base `Enemy` prefab.
+- The base `Enemy` prefab's `Rigidbody2D` sets **Exclude Layers → Enemy** (`m_Bits: 64`, layer 6). Every enemy body therefore ignores anything on its own layer, so bodies pass through each other instead of shoving or stacking at chokepoints — no global collision-matrix edit and no runtime code.
+- Everything else stays on `Default` and keeps colliding normally: player↔enemy, projectile↔enemy, enemy↔walls, and `WeaponDetection`'s trigger still sees dropped weapons.
+- Maskless queries are unaffected by layer exclusions: `ObstacleRaycast` and `MeleeFireStrategy` skip allies via the existing `Health`/`IEnemy` checks, so LOS and melee hit detection behave exactly as before.
+
 #### Dispatch & per-type states
 - `Update()` → `protected virtual HandleState(EnemyState)` — a switch that dispatches the 3 baseline states to `protected virtual` handlers (`HandleChasing`, `HandleSeekingWeapon`, `HandleAttacking`); subclasses override `HandleState` to add states and override individual handlers to modify rules (Template Method).
 - `CurrentState` has a `protected` setter; `protected virtual EnemyState InitialState` (default `Chasing`) selects the entry state per type.
@@ -755,7 +762,7 @@ Attacking
 | `EnemyDataApplier.cs` | `[DefaultExecutionOrder(-90)]` — pushes `EnemyData` into `Health.SetMaxHealth`, `Movement.SetBaseSpeed`, `EnemyCombat.SetAttackRange`, `SpriteRenderer` at Awake |
 | `MeleeBehavior.cs` | `EnemyBehavior` subclass — overrides `CanAcceptWeapon()` (melee only) |
 | `ShooterBehavior.cs` | `EnemyBehavior` subclass — projectile-only filter + retreat-while-firing (`SetRetreating` per state) |
-| `RobberBehavior.cs` | `EnemyBehavior` subclass — `Hiding`/`Stealing`/`Fleeing` states via `HandleState` override; steals the player's held weapon, flees `_fleeDuration`, plants and fires |
+| `RobberBehavior.cs` | `EnemyBehavior` subclass — `Hiding`/`Stealing`/`Fleeing` states via `HandleState` override; steals the player's held weapon, flees `_fleeDuration`, plants and fires; swaps `EnemyCombat` attack range per weapon type (`WeaponChanged` → melee reach ↔ base range) |
 | `EnemyStartingWeapon.cs` | Spawns the assigned weapon prefab and equips it in `Start` |
 | `MeleeEnemy.cs` (`Entities/EnemyRelated`) | Entity shell — requires `MeleeBehavior` instead of `EnemyBehavior` |
 | `ShooterEnemy.cs` (`Entities/EnemyRelated`) | Entity shell — requires `ShooterBehavior` |
@@ -788,7 +795,7 @@ Attacking
 - **Player weapon detection**: lazily resolves `Player → WeaponHolder` via `FindFirstObjectByType<Player>()` (no `Awake` in the subclass — Unity would shadow the base's private `Awake`).
 - **Standing still while shooting**: `EnemyAIInput.SetMoveEnabled(false)` — unique to the Robber's Attacking; the Shooter fires on the run, the Robber plants its feet.
 - **Hiding comfort zone**: retreats only while the player is within `EnemyCombat` attack range; holds position when the player is far.
-- **Stolen weapon variety**: no filter — it steals *whatever* the player holds (a stolen Katana makes it close in like a melee enemy, since `HandleAttacking` approaches when out of range).
+- **Stolen weapon variety**: no filter — it steals *whatever* the player holds. The attack range follows the weapon: `RobberBehavior` subscribes to `WeaponHolder.WeaponChanged`, captures the original `EnemyCombat` range lazily on the first change (still the `EnemyData_Robber` value, since the first event happens mid-run), and sets the melee range to `muzzle-to-center distance + MeleeFireStrategy.Range` for melee weapons (the swing's hit circle is centered at muzzle + Range, not on the enemy body — using the raw Range would make the Robber plant out of reach and whiff), or restores the base range for projectile weapons / after dropping (fires from the normal 7 units).
 
 - Each type is a `MonoBehaviour` that inherits from or composes `EnemyBehavior`
 - `EnemyCombat` adapts per type (some use `WeaponHolder`, some use custom logic)
@@ -911,7 +918,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | Prefab | Description |
 |--------|-------------|
 | **Player** | Player entity shell with all components (100 HP, speed 5, `PlayerDeathHandler`) |
-| **Enemy** | Enemy entity shell with AI, combat, weapon detection, `DestroyOnDeath`, `EnemyKillCounter` |
+| **Enemy** | Enemy entity shell with AI, combat, weapon detection, `DestroyOnDeath`, `EnemyKillCounter`, `PlayerHealOnKill` (heals the player 10 HP per kill) |
 | **MeleeEnemy** | Melee enemy (prefab variant of Enemy) — `MeleeBehavior`, `EnemyDataApplier` (`EnemyData_Melee`), `EnemyStartingWeapon` (Katana) |
 | **ShooterEnemy** | Shooter enemy (prefab variant of Enemy) — `ShooterBehavior`, `EnemyDataApplier` (`EnemyData_Shooter`), `EnemyStartingWeapon` (Pistol), retreat 0.6× |
 | **RobberEnemy** | Robber enemy (prefab variant of Enemy) — `RobberBehavior`, `EnemyDataApplier` (`EnemyData_Robber`), barehanded spawn |
@@ -1185,7 +1192,7 @@ Persistent singleton providing two mixer-driven layers. It mirrors the Settings 
 | Prefab | Purpose |
 |--------|---------|
 | Player | Player entity (Health, PlayerInput, WeaponHolder, LookDirection, Interaction, `PlayerDeathHandler`) |
-| Enemy | Enemy entity (AI, WeaponHolder, Health, `DestroyOnDeath`, `EnemyKillCounter`) |
+| Enemy | Enemy entity (AI, WeaponHolder, Health, `DestroyOnDeath`, `EnemyKillCounter`, `PlayerHealOnKill`) |
 | MeleeEnemy | Melee enemy entity — prefab variant of Enemy (`MeleeBehavior`, `EnemyDataApplier`, `EnemyStartingWeapon` with Katana) |
 | ShooterEnemy | Shooter enemy entity — prefab variant of Enemy (`ShooterBehavior`, `EnemyDataApplier`, `EnemyStartingWeapon` with Pistol, retreat 0.6×) |
 | RobberEnemy | Robber enemy entity — prefab variant of Enemy (`RobberBehavior`, `EnemyDataApplier`, barehanded; *Flee Duration* 2.5 s) |

@@ -173,7 +173,7 @@ MonoBehaviour:
       _toRoomIndex: 20
       _to: 2
       _oneWay: 0
-  - _data: {fileID: 11400000, guid: 608f516525375684789b077e3823a4b7, type: 2}
+  - _data: {fileID: 11400000, guid: d53d9b4e59f9a2b4c8aacc2cd43493b2, type: 2}
     _roomPrefab: {fileID: 8379563562898739331, guid: 6061e9bc0c7a6b940ab959a196f52d32, type: 3}
     _worldPosition: {x: 0, y: 1000}
     _links: []
