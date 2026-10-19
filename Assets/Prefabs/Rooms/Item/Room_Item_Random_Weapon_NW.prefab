@@ -4949,7 +4949,7 @@ GameObject:
   - component: {fileID: 399025423707645077}
   - component: {fileID: 6119450302277723587}
   m_Layer: 0
-  m_Name: Room_Item_Random_Weapon_NE
+  m_Name: Room_Item_Random_Weapon_NW
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
