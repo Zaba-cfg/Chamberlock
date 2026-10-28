@@ -15,7 +15,7 @@ MonoBehaviour:
   _weaponName: Deagle
   _icon: {fileID: -973813329046930543, guid: c2b481a7d016399409324068aac0cabd, type: 3}
   _damage: 9
-  _fireRate: 1.5
+  _fireRate: 2
   _magazineSize: 7
   _reloadDuration: 1.5
   _maxReserveAmmo: 21
