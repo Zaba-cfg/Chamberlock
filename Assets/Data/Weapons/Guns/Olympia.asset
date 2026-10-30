@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WeaponData
   _weaponName: Olympia
   _icon: {fileID: -2870492280576544230, guid: 3a48ee48c9e9e214f90a63210f784518, type: 3}
-  _damage: 9
+  _damage: 10
   _fireRate: 3
   _magazineSize: 2
   _reloadDuration: 0.75

@@ -5,6 +5,7 @@ namespace Systems.Game
         MainMenu,
         Running,
         Paused,
-        GameOver
+        GameOver,
+        Win
     }
 }

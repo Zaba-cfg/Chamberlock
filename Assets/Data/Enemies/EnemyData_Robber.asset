@@ -14,6 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Components.EnemyComponents.EnemyData
   _enemyName: Robber Enemy
   _sprite: {fileID: 4750829665347472847, guid: 3960d393e62d58d4dacbea55c641d316, type: 3}
-  _maxHealth: 30
+  _maxHealth: 20
   _moveSpeed: 4.5
   _attackRange: 7

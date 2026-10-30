@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WeaponData
   _weaponName: Mosin
   _icon: {fileID: 6199640236988154992, guid: 44d71792c886a4f4f93bf20785fcf1c8, type: 3}
-  _damage: 10
+  _damage: 15
   _fireRate: 1
   _magazineSize: 5
   _reloadDuration: 3

@@ -54,7 +54,7 @@ namespace Systems.Game
 
         private static float TimeScaleFor(GameState state)
         {
-            return state == GameState.Paused || state == GameState.GameOver ? 0f : 1f;
+            return state == GameState.Paused || state == GameState.GameOver || state == GameState.Win ? 0f : 1f;
         }
     }
 }

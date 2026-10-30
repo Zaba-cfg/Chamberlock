@@ -577,6 +577,10 @@ PrefabInstance:
       propertyPath: m_AnchorMax.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 515752572504930311, guid: 8a61505ba02dd144bafabdb4edfcb902, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 1301461025102475414, guid: 8a61505ba02dd144bafabdb4edfcb902, type: 3}
       propertyPath: m_AnchorMax.x
       value: 0
@@ -684,6 +688,14 @@ PrefabInstance:
     - target: {fileID: 5071057725163721951, guid: 8a61505ba02dd144bafabdb4edfcb902, type: 3}
       propertyPath: m_Name
       value: GameplayCanvas
+      objectReference: {fileID: 0}
+    - target: {fileID: 7270242628429137578, guid: 8a61505ba02dd144bafabdb4edfcb902, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: -263.4
+      objectReference: {fileID: 0}
+    - target: {fileID: 7348832512248143962, guid: 8a61505ba02dd144bafabdb4edfcb902, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: -388.4
       objectReference: {fileID: 0}
     - target: {fileID: 8562079576442638481, guid: 8a61505ba02dd144bafabdb4edfcb902, type: 3}
       propertyPath: m_AnchorMax.x

@@ -124,7 +124,7 @@ namespace Components.Rooms
             if (RunManager.Instance != null)
                 RunManager.Instance.EndRun();
 
-            GameManager.Instance.SetState(GameState.GameOver);
+            GameManager.Instance.SetState(GameState.Win);
         }
 
         private void LockDoors()

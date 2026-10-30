@@ -14,6 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Components.EnemyComponents.EnemyData
   _enemyName: Melee Enemy
   _sprite: {fileID: 7852077892343169363, guid: e8b0caa1d5a715a4b9b992dff69abfea, type: 3}
-  _maxHealth: 50
+  _maxHealth: 25
   _moveSpeed: 3.5
   _attackRange: 2

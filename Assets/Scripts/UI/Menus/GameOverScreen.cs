@@ -10,6 +10,7 @@ namespace UI.Menus
         [SerializeField] private TextMeshProUGUI _timeText;
         [SerializeField] private TextMeshProUGUI _killsText;
         [SerializeField] private TextMeshProUGUI _roomsText;
+        [SerializeField] private TextMeshProUGUI _gameOverText;
 
         private void Awake()
         {
@@ -35,7 +36,7 @@ namespace UI.Menus
         {
             GameManager.Instance.StateChanged += HandleStateChanged;
 
-            if (GameManager.Instance.CurrentState == GameState.GameOver)
+            if (GameManager.Instance.CurrentState == GameState.GameOver || GameManager.Instance.CurrentState == GameState.Win)
                 Show();
         }
 
@@ -67,7 +68,7 @@ namespace UI.Menus
 
         private void HandleStateChanged(GameState previous, GameState current)
         {
-            if (current == GameState.GameOver)
+            if (current == GameState.GameOver || current == GameState.Win)
             {
                 Show();
                 return;
@@ -81,8 +82,18 @@ namespace UI.Menus
             _timeText.text = $"Total time: {FormatTime(RunManager.Instance.ElapsedTime)}";
             _killsText.text = $"Total kills: {RunManager.Instance.Kills.ToString()}";
             _roomsText.text = $"Rooms cleared: {RunManager.Instance.RoomsCleared.ToString()}";
-
             _panel.SetActive(true);
+
+            if (GameManager.Instance.CurrentState == GameState.Win)
+            {
+                _gameOverText.text = "YOU WIN!";
+                _gameOverText.color = Color.lawnGreen;
+            }
+            else
+            {
+                _gameOverText.text = "GAME OVER";
+                _gameOverText.color = Color.red;
+            }
         }
 
         private static string FormatTime(float seconds)
