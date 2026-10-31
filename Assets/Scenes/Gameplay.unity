@@ -474,7 +474,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26f3eadfe35973c499e92aeeff7e3579, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Components.Map.DungeonManager
-  _map: {fileID: 11400000, guid: 57c01f412155bb544a1c320c5016f277, type: 2}
+  _availableMaps:
+  - {fileID: 11400000, guid: 57c01f412155bb544a1c320c5016f277, type: 2}
+  - {fileID: 11400000, guid: 7b27760f6b69b1f49ab734bd5c6ebc05, type: 2}
   _camera: {fileID: 985285110}
   _overlay: {fileID: 686312175230143526}
   _playerSpawnDistance: 1.5

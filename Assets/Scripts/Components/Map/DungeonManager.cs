@@ -6,12 +6,14 @@ using Components.Rooms;
 using Entities.PlayerRelated;
 using UI.RoomTransition;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 namespace Components.Map
 {
     public class DungeonManager : MonoBehaviour
     {
-        [SerializeField] private MapData _map;
+        [SerializeField] private List<MapData> _availableMaps = new();
+        private MapData _map;
         [SerializeField] private RoomCamera _camera;
         [SerializeField] private RoomTransitionOverlay _overlay;
         [SerializeField, Min(0f)] private float _playerSpawnDistance = 1.5f;
@@ -48,12 +50,14 @@ namespace Components.Map
 
             Instance = this;
 
-            if (_map == null)
-                throw new MissingReferenceException($"{name} is missing MapData.");
             if (_camera == null)
                 throw new MissingReferenceException($"{name} is missing RoomCamera.");
+
             if (_overlay == null)
                 throw new MissingReferenceException($"{name} is missing RoomTransitionOverlay.");
+
+            SelectRandomMap();
+
             if (_map.Rooms.Count == 0)
                 throw new MissingReferenceException($"{name}: {_map.name} has no rooms.");
 
@@ -82,6 +86,24 @@ namespace Components.Map
         {
             if (Instance == this)
                 Instance = null;
+        }
+        
+        private void SelectRandomMap()
+        {
+            if (_availableMaps == null || _availableMaps.Count == 0)
+                throw new MissingReferenceException($"{name}: no MapData assets assigned.");
+
+            foreach (MapData map in _availableMaps)
+            {
+                if (map == null)
+                    throw new MissingReferenceException($"{name}: the available maps list contains a null reference.");
+            }
+
+            int randomIndex = Random.Range(0, _availableMaps.Count);
+
+            _map = _availableMaps[randomIndex];
+
+            UnityEngine.Debug.Log($"{name}: selected map '{_map.name}'.");
         }
 
         private void ValidateMap()
